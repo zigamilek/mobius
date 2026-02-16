@@ -35,10 +35,10 @@ def create_openai_router() -> APIRouter:
         request: Request,
         _: None = Depends(_require_api_key),
     ) -> ModelListResponse:
-        llm_router = request.app.state.services["llm_router"]
+        config = request.app.state.services["config"]
         created = int(time.time())
-        cards = [ModelCard(id=model_name, created=created) for model_name in llm_router.list_models()]
-        logger.debug("Listing %d models.", len(cards))
+        cards = [ModelCard(id=config.openai_compat.master_model_id, created=created)]
+        logger.debug("Listing %d public model(s).", len(cards))
         return ModelListResponse(data=cards)
 
     @router.post("/chat/completions")

@@ -29,6 +29,7 @@ class RoutingDecision:
     domain: str
     confidence: float
     route_model: str
+    response_model: str
 
 
 def _now_unix() -> int:
@@ -84,6 +85,11 @@ class Supervisor:
         self.prompt_manager = prompt_manager
         self.journal_writer = journal_writer
         self.logger = get_logger(__name__)
+        self.public_model_id = self.config.openai_compat.master_model_id
+        self.allow_provider_model_passthrough = (
+            self.config.openai_compat.allow_provider_model_passthrough
+        )
+        self.provider_model_ids = set(self.llm_router.list_models())
 
     def _decide_routing(self, user_text: str, requested_model: str | None) -> RoutingDecision:
         ranked = rank_specialists(user_text)
@@ -108,28 +114,46 @@ class Supervisor:
             ):
                 selected.append(ranked[1][0])
 
-        route_model = (
-            requested_model
-            or (
+        requested = (requested_model or "").strip()
+        passthrough = (
+            self.allow_provider_model_passthrough
+            and bool(requested)
+            and requested in self.provider_model_ids
+            and requested != self.public_model_id
+        )
+        if passthrough:
+            route_model = requested
+            response_model = requested
+        else:
+            route_model = (
                 self.config.models.routing.by_domain(domain)
                 if domain != "general"
                 else self.config.models.routing.general
-            )
-            or self.config.models.default_chat
-        )
+            ) or self.config.models.default_chat
+            response_model = self.public_model_id
+            if requested and requested != self.public_model_id:
+                self.logger.info(
+                    "Requested model '%s' is not exposed; using master model '%s'.",
+                    requested,
+                    self.public_model_id,
+                )
+
         decision = RoutingDecision(
             selected=selected,
             domain=domain,
             confidence=confidence,
             route_model=route_model,
+            response_model=response_model,
         )
         self.logger.debug(
-            "Routing decision domain=%s confidence=%.2f specialists=%s route_model=%s requested_model=%s",
+            "Routing decision domain=%s confidence=%.2f specialists=%s route_model=%s response_model=%s requested_model=%s passthrough=%s",
             decision.domain,
             decision.confidence,
             [item.domain for item in decision.selected],
             decision.route_model,
+            decision.response_model,
             requested_model,
+            passthrough,
         )
         return decision
 
@@ -153,13 +177,13 @@ class Supervisor:
                 if success
                 else f"Memory `{memory_id}` not found."
             )
-            return _response_from_text(self.config.models.default_chat, message)
+            return _response_from_text(self.public_model_id, message)
 
         if normalized.startswith("/edit-memory "):
             parts = normalized.split(maxsplit=2)
             if len(parts) < 3:
                 return _response_from_text(
-                    self.config.models.default_chat,
+                    self.public_model_id,
                     "Usage: /edit-memory <memory_id> <instructions>",
                 )
             memory_id = parts[1]
@@ -171,7 +195,7 @@ class Supervisor:
                 if success
                 else f"Memory `{memory_id}` not found."
             )
-            return _response_from_text(self.config.models.default_chat, message)
+            return _response_from_text(self.public_model_id, message)
         return None
 
     @staticmethod
@@ -299,7 +323,7 @@ class Supervisor:
             passthrough=passthrough,
         )
         response = _chunk_to_dict(raw_response)
-        response["model"] = used_model
+        response["model"] = decision.response_model
         assistant_text = self._extract_assistant_text(response)
 
         record, journal_path = self._persist_side_effects(
@@ -317,7 +341,8 @@ class Supervisor:
         except Exception:
             pass
         self.logger.info(
-            "Non-stream completion finished model=%s elapsed_ms=%d",
+            "Non-stream completion finished public_model=%s internal_model=%s elapsed_ms=%d",
+            decision.response_model,
             used_model,
             int((perf_counter() - started_at) * 1000),
         )
@@ -368,6 +393,7 @@ class Supervisor:
                     collected.append(piece)
             except Exception:
                 pass
+            as_dict["model"] = decision.response_model
             yield f"data: {json.dumps(as_dict)}\n\n".encode("utf-8")
 
         assistant_text = "".join(collected).strip()
@@ -384,13 +410,14 @@ class Supervisor:
                 "id": stream_id or f"chatcmpl-{uuid4().hex}",
                 "object": "chat.completion.chunk",
                 "created": int(datetime.now(timezone.utc).timestamp()),
-                "model": used_model,
+                "model": decision.response_model,
                 "choices": [{"index": 0, "delta": {"content": tail}, "finish_reason": None}],
             }
             yield f"data: {json.dumps(synthetic_chunk)}\n\n".encode("utf-8")
         yield b"data: [DONE]\n\n"
         self.logger.info(
-            "Stream completion finished model=%s chunks=%d elapsed_ms=%d",
+            "Stream completion finished public_model=%s internal_model=%s chunks=%d elapsed_ms=%d",
+            decision.response_model,
             used_model,
             chunk_count,
             int((perf_counter() - started_at) * 1000),

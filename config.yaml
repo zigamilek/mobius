@@ -23,6 +23,10 @@ models:
   fallbacks:
     - gemini-2.5-flash
 
+openai_compat:
+  master_model_id: ai-agents-hub
+  allow_provider_model_passthrough: false
+
 specialists:
   prompts:
     directory: /etc/ai-agents-hub/prompts/specialists

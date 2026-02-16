@@ -128,6 +128,7 @@ Point Open WebUI OpenAI connection to:
 
 - Base URL: `http://<ai-agents-hub-host>:8080/v1`
 - API Key: one of `server.api_keys` values
+- Model shown in Open WebUI: `ai-agents-hub` (configurable via `openai_compat.master_model_id`)
 
 Note: in Open WebUI, use **Admin Settings -> Connections -> OpenAI API** (backend connection).  
 Direct browser-side connection checks can fail with `OpenAI: Network Problem` when browser network path differs.

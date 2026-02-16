@@ -130,6 +130,11 @@ class DiagnosticsConfig(BaseModel):
     )
 
 
+class OpenAICompatConfig(BaseModel):
+    master_model_id: str = "ai-agents-hub"
+    allow_provider_model_passthrough: bool = False
+
+
 class LoggingConfig(BaseModel):
     level: Literal["ERROR", "WARNING", "INFO", "DEBUG", "TRACE"] = "INFO"
     output: Literal["console", "file", "both"] = "console"
@@ -145,6 +150,7 @@ class AppConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
+    openai_compat: OpenAICompatConfig = Field(default_factory=OpenAICompatConfig)
     specialists: SpecialistsConfig = Field(default_factory=SpecialistsConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     journal: JournalConfig = Field(default_factory=JournalConfig)

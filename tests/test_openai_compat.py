@@ -13,6 +13,8 @@ def test_models_endpoint_returns_list() -> None:
     payload = response.json()
     assert payload["object"] == "list"
     assert isinstance(payload["data"], list)
+    assert len(payload["data"]) == 1
+    assert payload["data"][0]["id"] == "ai-agents-hub"
 
 
 def test_diagnostics_endpoints_are_available() -> None:
