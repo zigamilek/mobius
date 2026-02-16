@@ -60,6 +60,7 @@ function update_script() {
   local SERVICE_NAME="ai-agents-hub"
   local REPO_URL="${REPO_URL:-$AIHUB_REPO_URL}"
   local REPO_REF="${REPO_REF:-$AIHUB_REPO_REF}"
+  local GIT_SAFE_ARGS=(-c "safe.directory=${APP_DIR}")
 
   detect_service_port() {
     local config_file="${CONFIG_DIR}/config.yaml"
@@ -141,11 +142,11 @@ function update_script() {
   else
     pushd "${APP_DIR}" >/dev/null
     if [[ -n "${REPO_REF}" && "${REPO_REF}" != "HEAD" ]]; then
-      $STD git fetch origin "${REPO_REF}"
-      $STD git checkout "${REPO_REF}"
-      $STD git pull --ff-only origin "${REPO_REF}"
+      $STD git "${GIT_SAFE_ARGS[@]}" fetch origin "${REPO_REF}"
+      $STD git "${GIT_SAFE_ARGS[@]}" checkout "${REPO_REF}"
+      $STD git "${GIT_SAFE_ARGS[@]}" pull --ff-only origin "${REPO_REF}"
     else
-      $STD git pull --ff-only
+      $STD git "${GIT_SAFE_ARGS[@]}" pull --ff-only
     fi
     popd >/dev/null
   fi
