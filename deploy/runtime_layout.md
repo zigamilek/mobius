@@ -8,7 +8,7 @@ AI Agents Hub uses persistent paths so the service survives restarts.
 - Memory root: `/var/lib/ai-agents-hub/memories`
 - Obsidian vault: `/var/lib/ai-agents-hub/obsidian`
 - Logs: `/var/log/ai-agents-hub`
-- Specialist prompts: `/opt/ai-agents-hub/prompts/specialists/*.md`
+- Specialist prompts: `/etc/ai-agents-hub/prompts/specialists/*.md`
 
 ## Memory Files
 

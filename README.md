@@ -66,29 +66,42 @@ tail -f data/logs/ai-agents-hub.log
 
 ## Install in Proxmox LXC
 
-### One-liner (Proxmox host)
+### Tteck-Style One-liner (Proxmox host)
 
-After this repository is pushed to GitHub, run this on the Proxmox host:
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/main/deploy/proxmox/ai-agents-hub-lxc.sh)"
-```
-
-Optional overrides:
+Run on the Proxmox host:
 
 ```bash
-CTID=230 MEMORY=8192 CORES=4 DISK=20 REPO_URL=https://github.com/<YOUR_USER>/<YOUR_REPO>.git REPO_REF=main \
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/main/deploy/proxmox/ai-agents-hub-lxc.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/aiagentshub.sh)"
 ```
 
-Defaults used by the script:
+Optional overrides (same style as community-scripts):
 
-- Debian template: latest `debian-12-standard` available
-- CT networking: `ip=dhcp` on `vmbr0`
-- Rootfs storage: `local-lvm`
-- App install path in CT: `/opt/ai-agents-hub`
+```bash
+var_ctid=230 var_ram=8192 var_cpu=4 var_disk=20 \
+REPO_REF=<REPO_REF> \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/aiagentshub.sh)"
+```
 
-The script creates the CT, installs AI Agents Hub, and prints next-step commands.
+This installer follows the same lifecycle pattern as tteck/community-scripts:
+
+- host-side CT creation through `build.func`
+- in-CT install through `install/aiagentshub-install.sh`
+- same command inside CT triggers `update_script`
+
+### Update from inside the LXC (same command)
+
+Run inside the container:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/aiagentshub.sh)"
+```
+
+When executed inside LXC, this runs the script update flow and refreshes:
+
+- repo code in `/opt/ai-agents-hub`
+- Python environment
+- systemd service unit
+- service restart
 
 ### Manual (inside container)
 
@@ -125,12 +138,15 @@ Point Open WebUI OpenAI connection to:
 - Base URL: `http://<ai-agents-hub-host>:8080/v1`
 - API Key: one of `server.api_keys` values
 
+Note: in Open WebUI, use **Admin Settings -> Connections -> OpenAI API** (backend connection).  
+Direct browser-side connection checks can fail with `OpenAI: Network Problem` when browser network path differs.
+
 ## Configure Specialist System Prompts
 
 Prompts are loaded from markdown files in:
 
 - local: `./prompts/specialists`
-- LXC service default: `/opt/ai-agents-hub/prompts/specialists`
+- LXC service default: `/etc/ai-agents-hub/prompts/specialists`
 
 Config location:
 
@@ -159,6 +175,27 @@ If you changed `config.yaml` itself, restart the service.
 ```bash
 sudo systemctl restart ai-agents-hub
 ```
+
+## Onboarding Command
+
+After install, run:
+
+```bash
+ai-agents-hub onboard
+```
+
+It will guide you through:
+
+- API keys in env file
+- service host/port
+- prompt directory path
+- writing env/config safely
+
+Then it prints:
+
+- restart command
+- health-check commands
+- Open WebUI connection settings
 
 ## Memory Editing Strategy
 

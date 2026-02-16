@@ -25,7 +25,7 @@ models:
 
 specialists:
   prompts:
-    directory: /opt/ai-agents-hub/prompts/specialists
+    directory: /etc/ai-agents-hub/prompts/specialists
     auto_reload: true
     files:
       supervisor: supervisor.md

@@ -96,7 +96,7 @@ class SpecialistPromptFilesConfig(BaseModel):
 
 
 class SpecialistPromptsConfig(BaseModel):
-    directory: Path = Path("./prompts/specialists")
+    directory: Path = Path("/etc/ai-agents-hub/prompts/specialists")
     auto_reload: bool = True
     files: SpecialistPromptFilesConfig = Field(default_factory=SpecialistPromptFilesConfig)
 
