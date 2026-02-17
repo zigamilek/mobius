@@ -209,7 +209,7 @@ specialists:
       personal_development: personal_development.md
 ```
 
-The master routing/synthesis agent prompt is:
+The master routing supervisor prompt is:
 
 - `supervisor.md`
 
