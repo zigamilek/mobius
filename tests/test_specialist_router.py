@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from ai_agents_hub.config import AppConfig
-from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
+from ai_agents_hub.orchestration.specialist_router import SpecialistRoute, SpecialistRouter
 
 
 class StubLLMRouter:
@@ -61,14 +61,23 @@ def _config() -> AppConfig:
     )
 
 
+def _print_route(query: str, route: SpecialistRoute) -> None:
+    print(f"QUERY: {query}")
+    print(f"ROUTED SPECIALIST: {route.domain}")
+    print(f"CONFIDENCE: {route.confidence:.2f}")
+    print("---")
+
+
 def test_classifier_routes_to_health_domain() -> None:
+    query = "Can you help with tennis elbow rehab?"
     llm = StubLLMRouter(
         outputs=[
             '{"specialist":"health","confidence":0.92,"reason":"rehabilitation and injury context"}'
         ]
     )
     router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
-    result = asyncio.run(router.classify("Can you help with tennis elbow rehab?"))
+    result = asyncio.run(router.classify(query))
+    _print_route(query, result)
     assert result.domain == "health"
     assert result.confidence == 0.92
     assert result.classifier_model == "gpt-5-nano-2025-08-07"
@@ -77,26 +86,31 @@ def test_classifier_routes_to_health_domain() -> None:
 
 
 def test_classifier_falls_back_to_general_for_invalid_specialist() -> None:
+    query = "How should I budget this month?"
     llm = StubLLMRouter(
         outputs=[
             '{"specialist":"finance","confidence":0.9,"reason":"not supported"}'
         ]
     )
     router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
-    result = asyncio.run(router.classify("How should I budget this month?"))
+    result = asyncio.run(router.classify(query))
+    _print_route(query, result)
     assert result.domain == "general"
     assert result.reason == "invalid-specialist"
 
 
 def test_classifier_falls_back_to_general_for_invalid_json() -> None:
+    query = "I need advice"
     llm = StubLLMRouter(outputs=["not json"])
     router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
-    result = asyncio.run(router.classify("I need advice"))
+    result = asyncio.run(router.classify(query))
+    _print_route(query, result)
     assert result.domain == "general"
     assert result.reason == "invalid-specialist"
 
 
 def test_classifier_tries_openai_prefix_for_gpt_models() -> None:
+    query = "How can I improve my Proxmox backups?"
     llm = StubLLMRouter(
         outputs=[
             '{"specialist":"homelab","confidence":0.81,"reason":"infrastructure topic"}'
@@ -104,7 +118,8 @@ def test_classifier_tries_openai_prefix_for_gpt_models() -> None:
         fail_for_models={"gpt-5-nano-2025-08-07"},
     )
     router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
-    result = asyncio.run(router.classify("How can I improve my Proxmox backups?"))
+    result = asyncio.run(router.classify(query))
+    _print_route(query, result)
     assert result.domain == "homelab"
     assert [call["primary_model"] for call in llm.calls] == [
         "gpt-5-nano-2025-08-07",

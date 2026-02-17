@@ -24,6 +24,10 @@ API keys are referenced from environment variables:
 - `${ENV:GEMINI_API_KEY}`
 - `${ENV:AI_AGENTS_HUB_API_KEY}`
 
+When Gemini is configured with the OpenAI-compatible endpoint
+(`https://generativelanguage.googleapis.com/v1beta/openai/`), requests are sent
+through OpenAI-compatible transport and do not require Vertex/Google SDK libs.
+
 Use:
 
 - `.env` for local development secrets (copy from `.env.example`)
@@ -92,6 +96,25 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 python -m pytest -q tests/test_specialist_router.py tests/test_supervisor_routing_behavior.py tests/test_memory_curator.py tests/test_memory_workflow.py
 ```
+
+To print each routing test query and selected specialist:
+
+```bash
+python -m pytest -s -q tests/test_specialist_router.py
+```
+
+To run a live OpenWebUI-like routing probe (real model calls, no stubs):
+
+```bash
+AI_AGENTS_HUB_LIVE_TESTS=1 AI_AGENTS_HUB_CONFIG=config.local.yaml \
+python -m pytest -s -q tests/test_live_openwebui_behavior.py
+```
+
+This prints for each query:
+- query text
+- routed specialist
+- classifier model calls
+- specialist answer model calls
 
 ## Install in Proxmox LXC
 
