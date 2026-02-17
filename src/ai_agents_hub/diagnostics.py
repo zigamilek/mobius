@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ai_agents_hub.config import AppConfig
-from ai_agents_hub.memory.store import MemoryStore
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 
@@ -27,7 +26,6 @@ def readiness_payload(config: AppConfig) -> dict[str, Any]:
 
 def diagnostics_payload(
     config: AppConfig,
-    memory_store: MemoryStore,
     llm_router: LiteLLMRouter,
     prompt_manager: PromptManager | None = None,
 ) -> dict[str, Any]:
@@ -42,17 +40,8 @@ def diagnostics_payload(
         "service": "ai-agents-hub",
         "public_model": config.openai_compat.master_model_id,
         "models": llm_router.list_models(),
-        "memory": memory_store.index.stats(),
         "config": {
-            "memory_root": str(config.memory.root_path),
-            "memory_curator": {
-                "enabled": config.memory.curator.enabled,
-                "model": config.memory.curator.model,
-                "min_confidence": config.memory.curator.min_confidence,
-            },
             "routing_classifier_model": config.models.default_chat,
-            "journal_vault": str(config.journal.obsidian_vault_path),
-            "web_search_enabled": config.tools.web_search,
             "prompts": prompt_config,
             "logging": {
                 "level": config.logging.level,

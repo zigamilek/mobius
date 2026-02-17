@@ -54,40 +54,6 @@ class ModelsConfig(BaseModel):
     routing: RoutingModels = Field(default_factory=RoutingModels)
     fallbacks: list[str] = Field(default_factory=list)
 
-
-class MemoryCuratorConfig(BaseModel):
-    enabled: bool = True
-    model: str = "gemini-2.5-flash"
-    min_confidence: float = 0.55
-    max_existing_chars: int = 8000
-    max_summary_chars: int = 160
-
-
-class MemoryConfig(BaseModel):
-    root_path: Path = Path("/var/lib/ai-agents-hub/memories")
-    auto_write: bool = True
-    notify_on_write: bool = True
-    allow_undo: bool = True
-    curator: MemoryCuratorConfig = Field(default_factory=MemoryCuratorConfig)
-
-
-class JournalConfig(BaseModel):
-    enabled: bool = True
-    obsidian_vault_path: Path = Path("/var/lib/ai-agents-hub/obsidian")
-    daily_notes_dir: str = "Daily"
-    write_mode: Literal["append", "replace"] = "append"
-
-
-class ObsidianToolConfig(BaseModel):
-    enabled: bool = True
-    vault_path: Path = Path("/var/lib/ai-agents-hub/obsidian")
-
-
-class ToolsConfig(BaseModel):
-    web_search: bool = True
-    obsidian: ObsidianToolConfig = Field(default_factory=ObsidianToolConfig)
-
-
 class SpecialistSelectionConfig(BaseModel):
     min_confidence: float = 0.6
     dual_specialist_delta: float = 0.08
@@ -161,9 +127,6 @@ class AppConfig(BaseModel):
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     openai_compat: OpenAICompatConfig = Field(default_factory=OpenAICompatConfig)
     specialists: SpecialistsConfig = Field(default_factory=SpecialistsConfig)
-    memory: MemoryConfig = Field(default_factory=MemoryConfig)
-    journal: JournalConfig = Field(default_factory=JournalConfig)
-    tools: ToolsConfig = Field(default_factory=ToolsConfig)
     router: RouterConfig = Field(default_factory=RouterConfig)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

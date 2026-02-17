@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ai-agents-hub"
 version = "0.1.0"
-description = "OpenAI-compatible multi-agent router/supervisor with markdown memory."
+description = "OpenAI-compatible specialist router/supervisor."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,7 +15,6 @@ dependencies = [
   "pyyaml>=6.0.1",
   "python-dotenv>=1.0.1",
   "litellm>=1.50.0",
-  "duckduckgo-search>=7.0.0",
 ]
 
 [project.optional-dependencies]
