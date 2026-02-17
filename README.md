@@ -35,7 +35,7 @@ For local macOS testing, use `config.local.yaml` so data and logs stay under `./
 
 ### Specialist Routing Model
 
-`models.orchestrator` is used as the specialist routing classifier model.
+`models.orchestrator` is used as the specialist routing orchestrator model.
 
 Default:
 
@@ -44,7 +44,7 @@ models:
   orchestrator: gpt-5-nano-2025-08-07
 ```
 
-On each turn, the classifier chooses exactly one specialist domain from:
+On each turn, the orchestrator chooses exactly one specialist domain from:
 `general`, `health`, `parenting`, `relationship`, `homelab`, `personal_development`.
 
 For non-general routes, the assistant response starts with:
@@ -113,8 +113,8 @@ This prints for each query:
 - routed specialist
 - routing confidence
 - routing reason
-- classifier model calls
-- specialist answer model calls
+- orchestrator model calls
+- specialist model calls
 
 ## Install in Proxmox LXC
 

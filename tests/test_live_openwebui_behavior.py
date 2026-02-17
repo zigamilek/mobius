@@ -78,8 +78,8 @@ def _extract_json_payload(text: str) -> dict[str, Any]:
 
 
 def _extract_confidence(calls: list[dict[str, Any]]) -> float | None:
-    classifier_calls = [c for c in calls if c["include_fallbacks_requested"] is False]
-    for call in reversed(classifier_calls):
+    orchestrator_calls = [c for c in calls if c["include_fallbacks_requested"] is False]
+    for call in reversed(orchestrator_calls):
         text = str(call.get("response_text") or "").strip()
         if not text:
             continue
@@ -94,8 +94,8 @@ def _extract_confidence(calls: list[dict[str, Any]]) -> float | None:
 
 
 def _extract_reason(calls: list[dict[str, Any]]) -> str | None:
-    classifier_calls = [c for c in calls if c["include_fallbacks_requested"] is False]
-    for call in reversed(classifier_calls):
+    orchestrator_calls = [c for c in calls if c["include_fallbacks_requested"] is False]
+    for call in reversed(orchestrator_calls):
         text = str(call.get("response_text") or "").strip()
         if not text:
             continue
@@ -175,11 +175,11 @@ def test_live_openwebui_like_routing_flow() -> None:
     needs_openai = default_model.startswith("gpt") or default_model.startswith("openai/")
     needs_gemini = default_model.startswith("gemini")
     if needs_openai and not cfg.providers.openai.api_key:
-        pytest.skip("OPENAI_API_KEY is required for live classifier model.")
+        pytest.skip("OPENAI_API_KEY is required for live orchestrator model.")
     if needs_gemini and not cfg.providers.gemini.api_key:
-        pytest.skip("GEMINI_API_KEY is required for live classifier model.")
+        pytest.skip("GEMINI_API_KEY is required for live orchestrator model.")
 
-    # Keep probe focused on classifier + specialist routing behavior.
+    # Keep probe focused on orchestrator + specialist routing behavior.
     cfg.models.fallbacks = []
     cfg.specialists.prompts.directory = Path("prompts/specialists").resolve()
     if not cfg.providers.gemini.api_key:
@@ -224,12 +224,12 @@ def test_live_openwebui_like_routing_flow() -> None:
         routed_specialist = _parse_specialist_from_response(content)
 
         calls = llm_router.calls[start_idx:]
-        classifier_models = [
+        orchestrator_models = [
             call["primary_model"]
             for call in calls
             if call["include_fallbacks_requested"] is False
         ]
-        answer_models = [
+        specialist_models = [
             call["primary_model"]
             for call in calls
             if call["include_fallbacks_requested"] is True
@@ -245,10 +245,10 @@ def test_live_openwebui_like_routing_flow() -> None:
             else "ROUTING CONFIDENCE: n/a"
         )
         print(f"ROUTING REASON: {reason or 'n/a'}")
-        print(f"CLASSIFIER MODEL CALLS: {classifier_models}")
-        print(f"ANSWER MODEL CALLS: {answer_models}")
+        print(f"ORCHESTRATOR MODEL CALLS: {orchestrator_models}")
+        print(f"SPECIALIST MODEL CALLS: {specialist_models}")
         print("---")
 
         assert content
-        assert classifier_models, "Expected at least one classifier model call."
-        assert answer_models, "Expected at least one specialist answer model call."
+        assert orchestrator_models, "Expected at least one orchestrator model call."
+        assert specialist_models, "Expected at least one specialist model call."

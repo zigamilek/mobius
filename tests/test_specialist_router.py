@@ -68,7 +68,7 @@ def _print_route(query: str, route: SpecialistRoute) -> None:
     print("---")
 
 
-def test_classifier_routes_to_health_domain() -> None:
+def test_orchestrator_routes_to_health_domain() -> None:
     query = "Can you help with tennis elbow rehab?"
     llm = StubLLMRouter(
         outputs=[
@@ -80,12 +80,12 @@ def test_classifier_routes_to_health_domain() -> None:
     _print_route(query, result)
     assert result.domain == "health"
     assert result.confidence == 0.92
-    assert result.classifier_model == "gpt-5-nano-2025-08-07"
+    assert result.orchestrator_model == "gpt-5-nano-2025-08-07"
     assert llm.calls[0]["include_fallbacks"] is False
     assert llm.calls[0]["passthrough"] == {}
 
 
-def test_classifier_falls_back_to_general_for_invalid_specialist() -> None:
+def test_orchestrator_falls_back_to_general_for_invalid_specialist() -> None:
     query = "How should I budget this month?"
     llm = StubLLMRouter(
         outputs=[
@@ -99,7 +99,7 @@ def test_classifier_falls_back_to_general_for_invalid_specialist() -> None:
     assert result.reason == "invalid-specialist"
 
 
-def test_classifier_falls_back_to_general_for_invalid_json() -> None:
+def test_orchestrator_falls_back_to_general_for_invalid_json() -> None:
     query = "I need advice"
     llm = StubLLMRouter(outputs=["not json"])
     router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
@@ -109,7 +109,7 @@ def test_classifier_falls_back_to_general_for_invalid_json() -> None:
     assert result.reason == "invalid-specialist"
 
 
-def test_classifier_tries_openai_prefix_for_gpt_models() -> None:
+def test_orchestrator_tries_openai_prefix_for_gpt_models() -> None:
     query = "How can I improve my Proxmox backups?"
     llm = StubLLMRouter(
         outputs=[

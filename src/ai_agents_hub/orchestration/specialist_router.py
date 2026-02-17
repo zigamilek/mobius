@@ -18,7 +18,7 @@ class SpecialistRoute:
     domain: str
     confidence: float
     reason: str
-    classifier_model: str | None
+    orchestrator_model: str | None
 
 
 def _response_to_dict(chunk: Any) -> dict[str, Any]:
@@ -82,14 +82,14 @@ class SpecialistRouter:
                 domain="general",
                 confidence=0.0,
                 reason="empty-user-message",
-                classifier_model=None,
+                orchestrator_model=None,
             )
 
         specialist_lines = "\n".join(
             f"- {profile.domain}: {profile.routing_hint}" for profile in SPECIALISTS
         )
         system_prompt = (
-            "You are the routing classifier for AI Agents Hub.\n"
+            "You are the routing orchestrator for AI Agents Hub.\n"
             "Your job: choose exactly ONE specialist for the latest user message.\n"
             "Always respond with ONLY a single JSON object and nothing else.\n"
             "Do not include markdown, code fences, commentary, or extra keys.\n"
@@ -114,7 +114,7 @@ class SpecialistRouter:
         last_error: Exception | None = None
         for candidate_model in candidates:
             try:
-                # Keep classifier call minimal because some models reject optional
+                # Keep orchestrator call minimal because some models reject optional
                 # generation params like temperature/max_tokens.
                 used_model, raw = await self.llm_router.chat_completion(
                     primary_model=candidate_model,
@@ -129,13 +129,13 @@ class SpecialistRouter:
                 domain = normalize_domain(str(payload.get("specialist", "") or ""))
                 if domain not in self.allowed_domains:
                     self.logger.warning(
-                        "Classifier returned invalid specialist '%s'; using general.", domain
+                        "Orchestrator returned invalid specialist '%s'; using general.", domain
                     )
                     return SpecialistRoute(
                         domain="general",
                         confidence=0.0,
                         reason="invalid-specialist",
-                        classifier_model=used_model,
+                        orchestrator_model=used_model,
                     )
                 confidence_raw = payload.get("confidence", 0.0)
                 try:
@@ -146,7 +146,7 @@ class SpecialistRouter:
                 reason = str(payload.get("reason", "") or "").strip()
                 chosen = get_specialist(domain)
                 self.logger.debug(
-                    "Classifier routed domain=%s confidence=%.2f reason=%s model=%s",
+                    "Orchestrator routed domain=%s confidence=%.2f reason=%s model=%s",
                     chosen.domain,
                     confidence,
                     reason,
@@ -156,21 +156,21 @@ class SpecialistRouter:
                     domain=chosen.domain,
                     confidence=confidence,
                     reason=reason,
-                    classifier_model=used_model,
+                    orchestrator_model=used_model,
                 )
             except Exception as exc:
                 last_error = exc
                 self.logger.warning(
-                    "Classifier routing failed model=%s error=%s",
+                    "Orchestrator routing failed model=%s error=%s",
                     candidate_model,
                     exc.__class__.__name__,
                 )
-                self.logger.debug("Classifier routing details: %s", str(exc))
+                self.logger.debug("Orchestrator routing details: %s", str(exc))
 
         error_name = last_error.__class__.__name__ if last_error else "UnknownError"
         return SpecialistRoute(
             domain="general",
             confidence=0.0,
-            reason=f"classifier-error:{error_name}",
-            classifier_model=None,
+            reason=f"orchestrator-error:{error_name}",
+            orchestrator_model=None,
         )

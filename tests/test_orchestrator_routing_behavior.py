@@ -48,7 +48,7 @@ class StubSpecialistRouter:
     domain: str
     confidence: float = 0.91
     reason: str = "test"
-    classifier_model: str = "gpt-5-nano-2025-08-07"
+    orchestrator_model: str = "gpt-5-nano-2025-08-07"
     latest_seen_text: str = ""
 
     async def classify(self, latest_user_text: str) -> SpecialistRoute:
@@ -57,7 +57,7 @@ class StubSpecialistRouter:
             domain=self.domain,
             confidence=self.confidence,
             reason=self.reason,
-            classifier_model=self.classifier_model,
+            orchestrator_model=self.orchestrator_model,
         )
 
 

@@ -23,7 +23,7 @@ class RoutingDecision:
     confidence: float
     route_model: str
     response_model: str
-    classifier_model: str | None
+    orchestrator_model: str | None
 
 
 def _message_to_dict(message: OpenAIMessage) -> dict[str, Any]:
@@ -100,16 +100,16 @@ class Orchestrator:
             confidence=confidence,
             route_model=route_model,
             response_model=response_model,
-            classifier_model=route.classifier_model,
+            orchestrator_model=route.orchestrator_model,
         )
         self.logger.debug(
-            "Routing decision domain=%s confidence=%.2f specialists=%s route_model=%s response_model=%s classifier_model=%s requested_model=%s passthrough=%s",
+            "Routing decision domain=%s confidence=%.2f specialists=%s route_model=%s response_model=%s orchestrator_model=%s requested_model=%s passthrough=%s",
             decision.domain,
             decision.confidence,
             [item.domain for item in decision.selected],
             decision.route_model,
             decision.response_model,
-            decision.classifier_model,
+            decision.orchestrator_model,
             requested_model,
             passthrough,
         )
