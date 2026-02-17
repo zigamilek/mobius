@@ -6,8 +6,8 @@ from typing import Any
 
 from ai_agents_hub.api.schemas import ChatCompletionRequest
 from ai_agents_hub.config import AppConfig
+from ai_agents_hub.orchestration.orchestrator import Orchestrator
 from ai_agents_hub.orchestration.specialist_router import SpecialistRoute
-from ai_agents_hub.orchestration.supervisor import Orchestrator
 
 
 class StubLLMRouter:
@@ -64,7 +64,7 @@ class StubSpecialistRouter:
 class StubPromptManager:
     def get(self, key: str) -> str:
         prompts = {
-            "supervisor": "supervisor prompt",
+            "orchestrator": "orchestrator prompt",
             "general": "general prompt",
             "health": "health prompt",
             "parenting": "parenting prompt",

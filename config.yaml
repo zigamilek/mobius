@@ -32,7 +32,7 @@ specialists:
     directory: /etc/ai-agents-hub/prompts/specialists
     auto_reload: true
     files:
-      supervisor: supervisor.md
+      orchestrator: orchestrator.md
       general: general.md
       health: health.md
       parenting: parenting.md

@@ -7,7 +7,7 @@ from ai_agents_hub.config import AppConfig
 from ai_agents_hub.logging_setup import get_logger
 
 PROMPT_KEYS: tuple[str, ...] = (
-    "supervisor",
+    "orchestrator",
     "general",
     "health",
     "parenting",
@@ -17,8 +17,8 @@ PROMPT_KEYS: tuple[str, ...] = (
 )
 
 DEFAULT_PROMPTS: dict[str, str] = {
-    "supervisor": (
-        "You are the master supervisor agent. Decide whether specialist guidance "
+    "orchestrator": (
+        "You are the master orchestrator agent. Decide whether specialist guidance "
         "is needed and synthesize one coherent final answer with no contradictions."
     ),
     "general": (

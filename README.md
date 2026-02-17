@@ -92,7 +92,7 @@ You can validate routing behavior locally before pushing/deploying:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
-python -m pytest -q tests/test_specialist_router.py tests/test_supervisor_routing_behavior.py
+python -m pytest -q tests/test_specialist_router.py tests/test_orchestrator_routing_behavior.py
 ```
 
 To print each routing test query and selected specialist:
@@ -200,7 +200,7 @@ specialists:
     directory: ./prompts/specialists
     auto_reload: true
     files:
-      supervisor: supervisor.md
+      orchestrator: orchestrator.md
       general: general.md
       health: health.md
       parenting: parenting.md
@@ -209,9 +209,9 @@ specialists:
       personal_development: personal_development.md
 ```
 
-The master routing supervisor prompt is:
+The master routing orchestrator prompt is:
 
-- `supervisor.md`
+- `orchestrator.md`
 
 When `auto_reload: true`, prompt edits are reloaded automatically on next request.
 If you changed `config.yaml` itself, restart the service.

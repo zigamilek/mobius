@@ -11,8 +11,8 @@ import pytest
 
 from ai_agents_hub.api.schemas import ChatCompletionRequest
 from ai_agents_hub.config import AppConfig, load_config
+from ai_agents_hub.orchestration.orchestrator import Orchestrator
 from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
-from ai_agents_hub.orchestration.supervisor import Orchestrator
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 

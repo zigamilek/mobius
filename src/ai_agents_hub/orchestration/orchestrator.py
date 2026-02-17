@@ -118,7 +118,7 @@ class Orchestrator:
     def _build_system_prompt(self, selected: list[SpecialistProfile]) -> str:
         if not selected:
             return self.prompt_manager.get("general")
-        lines = [self.prompt_manager.get("supervisor"), "", "Specialist instructions:"]
+        lines = [self.prompt_manager.get("orchestrator"), "", "Specialist instructions:"]
         for specialist in selected:
             lines.append(f"- {specialist.label} ({specialist.domain}):")
             lines.append(self.prompt_manager.get(specialist.domain))

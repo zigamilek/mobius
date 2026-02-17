@@ -21,7 +21,7 @@ def test_prompt_file_reload_and_general_prompt_override(tmp_path: Path) -> None:
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir(parents=True, exist_ok=True)
     files = {
-        "supervisor.md": "Supervisor prompt one",
+        "orchestrator.md": "Orchestrator prompt one",
         "general.md": "General prompt one",
         "health.md": "Health prompt",
         "parenting.md": "Parenting prompt",

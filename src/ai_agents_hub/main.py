@@ -9,8 +9,8 @@ from ai_agents_hub.api.openai_compat import create_openai_router
 from ai_agents_hub.config import AppConfig, load_config
 from ai_agents_hub.diagnostics import diagnostics_payload, health_payload, readiness_payload
 from ai_agents_hub.logging_setup import configure_logging, get_logger
+from ai_agents_hub.orchestration.orchestrator import Orchestrator
 from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
-from ai_agents_hub.orchestration.supervisor import Orchestrator
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 

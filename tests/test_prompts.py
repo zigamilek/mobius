@@ -24,7 +24,7 @@ def test_prompt_auto_reload_on_change(tmp_path: Path) -> None:
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir(parents=True, exist_ok=True)
     for key in (
-        "supervisor",
+        "orchestrator",
         "general",
         "health",
         "parenting",
@@ -38,7 +38,7 @@ def test_prompt_auto_reload_on_change(tmp_path: Path) -> None:
         {"specialists": {"prompts": {"directory": str(prompt_dir), "auto_reload": True}}}
     )
     manager = PromptManager(config)
-    assert manager.get("supervisor") == "supervisor v1"
+    assert manager.get("orchestrator") == "orchestrator v1"
 
-    (prompt_dir / "supervisor.md").write_text("supervisor v2", encoding="utf-8")
-    assert manager.get("supervisor") == "supervisor v2"
+    (prompt_dir / "orchestrator.md").write_text("orchestrator v2", encoding="utf-8")
+    assert manager.get("orchestrator") == "orchestrator v2"

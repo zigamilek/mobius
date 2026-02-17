@@ -55,7 +55,7 @@ class ModelsConfig(BaseModel):
     fallbacks: list[str] = Field(default_factory=list)
 
 class SpecialistPromptFilesConfig(BaseModel):
-    supervisor: str = "supervisor.md"
+    orchestrator: str = "orchestrator.md"
     general: str = "general.md"
     health: str = "health.md"
     parenting: str = "parenting.md"
