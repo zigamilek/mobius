@@ -54,12 +54,6 @@ class ModelsConfig(BaseModel):
     routing: RoutingModels = Field(default_factory=RoutingModels)
     fallbacks: list[str] = Field(default_factory=list)
 
-class SpecialistSelectionConfig(BaseModel):
-    min_confidence: float = 0.6
-    dual_specialist_delta: float = 0.08
-    max_specialists_per_turn: int = 2
-
-
 class SpecialistPromptFilesConfig(BaseModel):
     supervisor: str = "supervisor.md"
     general: str = "general.md"
@@ -78,18 +72,6 @@ class SpecialistPromptsConfig(BaseModel):
 
 class SpecialistsConfig(BaseModel):
     prompts: SpecialistPromptsConfig = Field(default_factory=SpecialistPromptsConfig)
-
-
-class SynthesisConfig(BaseModel):
-    enabled: bool = True
-    model: str | None = None
-
-
-class RouterConfig(BaseModel):
-    specialist_selection: SpecialistSelectionConfig = Field(
-        default_factory=SpecialistSelectionConfig
-    )
-    synthesis: SynthesisConfig = Field(default_factory=SynthesisConfig)
 
 
 class DiagnosticEndpointsConfig(BaseModel):
@@ -127,7 +109,6 @@ class AppConfig(BaseModel):
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     openai_compat: OpenAICompatConfig = Field(default_factory=OpenAICompatConfig)
     specialists: SpecialistsConfig = Field(default_factory=SpecialistsConfig)
-    router: RouterConfig = Field(default_factory=RouterConfig)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
