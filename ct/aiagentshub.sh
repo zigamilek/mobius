@@ -56,7 +56,6 @@ function update_script() {
 
   local APP_DIR="/opt/ai-agents-hub"
   local CONFIG_DIR="/etc/ai-agents-hub"
-  local DATA_DIR="/var/lib/ai-agents-hub"
   local SERVICE_NAME="ai-agents-hub"
   local REPO_URL="${REPO_URL:-$AIHUB_REPO_URL}"
   local REPO_REF="${REPO_REF:-$AIHUB_REPO_REF}"
@@ -164,7 +163,7 @@ function update_script() {
   msg_ok "CLI commands available: ai-agents-hub, aiagentshub"
 
   msg_info "Refreshing runtime files"
-  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/prompts/specialists" "${DATA_DIR}/memories" "${DATA_DIR}/obsidian" /var/log/ai-agents-hub
+  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/prompts/specialists" /var/log/ai-agents-hub
   [[ -f "${CONFIG_DIR}/config.yaml" ]] || $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
   if [[ ! -f "${CONFIG_DIR}/ai-agents-hub.env" ]]; then
     cat <<'EOF' > "${CONFIG_DIR}/ai-agents-hub.env"
@@ -179,7 +178,7 @@ EOF
     [[ -f "${CONFIG_DIR}/prompts/specialists/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/prompts/specialists/${prompt_name}"
   done
   $STD cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
-  $STD chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" "${DATA_DIR}" /var/log/ai-agents-hub
+  $STD chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" /var/log/ai-agents-hub
   msg_ok "Runtime files refreshed"
 
   msg_info "Restarting ${SERVICE_NAME}"

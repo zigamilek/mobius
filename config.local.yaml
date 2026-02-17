@@ -40,39 +40,6 @@ specialists:
       homelab: homelab.md
       personal_development: personal_development.md
 
-memory:
-  root_path: ./data/memories
-  auto_write: true
-  notify_on_write: true
-  allow_undo: true
-  curator:
-    enabled: true
-    model: gemini-2.5-flash
-    min_confidence: 0.55
-    max_existing_chars: 8000
-    max_summary_chars: 160
-
-journal:
-  enabled: true
-  obsidian_vault_path: ./data/obsidian
-  daily_notes_dir: Daily
-  write_mode: append
-
-tools:
-  web_search: true
-  obsidian:
-    enabled: true
-    vault_path: ./data/obsidian
-
-router:
-  specialist_selection:
-    min_confidence: 0.6
-    dual_specialist_delta: 0.08
-    max_specialists_per_turn: 2
-  synthesis:
-    enabled: true
-    model: gpt-4o-mini
-
 diagnostics:
   enabled: true
   endpoints:

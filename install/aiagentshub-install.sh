@@ -6,7 +6,6 @@ catch_errors
 
 APP="AI Agents Hub"
 APP_DIR="/opt/ai-agents-hub"
-DATA_DIR="/var/lib/ai-agents-hub"
 CONFIG_DIR="/etc/ai-agents-hub"
 SERVICE_NAME="ai-agents-hub"
 REPO_URL="${REPO_URL:-https://github.com/zigamilek/ai-agents-hub.git}"
@@ -85,7 +84,7 @@ fi
 msg_ok "Service user ready"
 
 msg_info "Preparing directories"
-$STD mkdir -p "${APP_DIR}" "${DATA_DIR}/memories" "${DATA_DIR}/obsidian" "${CONFIG_DIR}/prompts/specialists" /var/log/ai-agents-hub
+$STD mkdir -p "${APP_DIR}" "${CONFIG_DIR}/prompts/specialists" /var/log/ai-agents-hub
 msg_ok "Directories prepared"
 
 msg_info "Cloning repository"
@@ -133,7 +132,7 @@ msg_info "Installing systemd service"
 $STD cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
 
 msg_info "Applying ownership"
-$STD chown -R aihub:aihub "${APP_DIR}" "${DATA_DIR}" "${CONFIG_DIR}" /var/log/ai-agents-hub
+$STD chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" /var/log/ai-agents-hub
 msg_ok "Ownership applied"
 
 $STD systemctl daemon-reload

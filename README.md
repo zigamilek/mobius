@@ -7,11 +7,9 @@ AI Agents Hub is a custom router/supervisor service that exposes an OpenAI-compa
 - OpenAI-compatible endpoints:
   - `GET /v1/models`
   - `POST /v1/chat/completions` (streaming and non-streaming)
-- Specialist routing with coherent final response synthesis
-- Web search augmentation with source-aware output
+- LLM-based specialist routing with one coherent final response
 - Image payload passthrough through `chat/completions`
-- AI-curated domain memory store (one markdown file per domain/topic)
-- Obsidian daily journal writing (journals are not part of memory store)
+- Configurable specialist prompts loaded from markdown files
 - Restart-safe persistence and diagnostics endpoints
 
 ## Configuration
@@ -88,13 +86,13 @@ tail -f data/logs/ai-agents-hub.log
 
 ### Local Behavior Tests
 
-You can validate routing and memory behavior locally before pushing/deploying:
+You can validate routing behavior locally before pushing/deploying:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
-python -m pytest -q tests/test_specialist_router.py tests/test_supervisor_routing_behavior.py tests/test_memory_curator.py tests/test_memory_workflow.py
+python -m pytest -q tests/test_specialist_router.py tests/test_supervisor_routing_behavior.py
 ```
 
 To print each routing test query and selected specialist:
@@ -113,6 +111,8 @@ python -m pytest -s -q tests/test_live_openwebui_behavior.py
 This prints for each query:
 - query text
 - routed specialist
+- routing confidence
+- routing reason
 - classifier model calls
 - specialist answer model calls
 
@@ -241,25 +241,3 @@ Then it prints:
 - health-check commands
 - Open WebUI connection settings
 
-## Memory Editing Strategy
-
-Canonical memory storage is one markdown file per domain under:
-
-- `memories/domains/<domain>.md`
-
-The memory curator model decides whether a new durable memory should be added, and avoids
-duplicates when a similar memory already exists.
-
-Default memory curator config:
-
-```yaml
-memory:
-  curator:
-    enabled: true
-    model: gemini-2.5-flash
-    min_confidence: 0.55
-    max_existing_chars: 8000
-    max_summary_chars: 160
-```
-
-You can manually edit each domain file directly in Obsidian or any editor.
