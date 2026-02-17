@@ -38,7 +38,7 @@ def diagnostics_payload(
 
     return {
         "service": "ai-agents-hub",
-        "public_model": config.openai_compatibility.public_model_id,
+        "public_model": config.api.public_model_id,
         "models": llm_router.list_models(),
         "config": {
             "orchestrator_model": config.models.orchestrator,

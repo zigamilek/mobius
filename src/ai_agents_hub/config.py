@@ -87,7 +87,7 @@ class DiagnosticsConfig(BaseModel):
     )
 
 
-class OpenAICompatibilityConfig(BaseModel):
+class ApiConfig(BaseModel):
     public_model_id: str = "ai-agents-hub"
     allow_provider_model_passthrough: bool = False
 
@@ -107,9 +107,7 @@ class AppConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
-    openai_compatibility: OpenAICompatibilityConfig = Field(
-        default_factory=OpenAICompatibilityConfig
-    )
+    api: ApiConfig = Field(default_factory=ApiConfig)
     specialists: SpecialistsConfig = Field(default_factory=SpecialistsConfig)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

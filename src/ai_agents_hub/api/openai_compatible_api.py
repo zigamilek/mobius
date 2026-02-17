@@ -28,7 +28,7 @@ def _require_api_key(request: Request) -> None:
 
 
 def create_openai_router() -> APIRouter:
-    router = APIRouter(prefix="/v1", tags=["openai-compat"])
+    router = APIRouter(prefix="/v1", tags=["openai-compatible-api"])
 
     @router.get("/models", response_model=ModelListResponse)
     async def list_models(
@@ -37,7 +37,7 @@ def create_openai_router() -> APIRouter:
     ) -> ModelListResponse:
         config = request.app.state.services["config"]
         created = int(time.time())
-        cards = [ModelCard(id=config.openai_compatibility.public_model_id, created=created)]
+        cards = [ModelCard(id=config.api.public_model_id, created=created)]
         logger.debug("Listing %d public model(s).", len(cards))
         return ModelListResponse(data=cards)
 

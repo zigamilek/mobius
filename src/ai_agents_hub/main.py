@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from ai_agents_hub.api.openai_compat import create_openai_router
+from ai_agents_hub.api.openai_compatible_api import create_openai_router
 from ai_agents_hub.config import AppConfig, load_config
 from ai_agents_hub.diagnostics import diagnostics_payload, health_payload, readiness_payload
 from ai_agents_hub.logging_setup import configure_logging, get_logger

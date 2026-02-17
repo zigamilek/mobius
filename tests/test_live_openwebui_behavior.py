@@ -214,7 +214,7 @@ def test_live_openwebui_like_routing_flow() -> None:
         start_idx = len(llm_router.calls)
         request = ChatCompletionRequest.model_validate(
             {
-                "model": cfg.openai_compatibility.public_model_id,
+                "model": cfg.api.public_model_id,
                 "messages": [{"role": "user", "content": query}],
                 "stream": False,
             }

@@ -54,9 +54,9 @@ class Orchestrator:
         self.specialist_router = specialist_router
         self.prompt_manager = prompt_manager
         self.logger = get_logger(__name__)
-        self.public_model_id = self.config.openai_compatibility.public_model_id
+        self.public_model_id = self.config.api.public_model_id
         self.allow_provider_model_passthrough = (
-            self.config.openai_compatibility.allow_provider_model_passthrough
+            self.config.api.allow_provider_model_passthrough
         )
         self.provider_model_ids = set(self.llm_router.list_models())
 

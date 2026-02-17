@@ -23,7 +23,8 @@ models:
   fallbacks:
     - gemini-2.5-flash
 
-openai_compatibility:
+# OpenAI-compatible API contract exposed to clients (for example Open WebUI).
+api:
   public_model_id: ai-agents-hub
   allow_provider_model_passthrough: false
 
