@@ -141,4 +141,4 @@ _verify_service_start "${SERVICE_NAME}"
 msg_ok "Service installed and started"
 
 msg_ok "Installation complete"
-msg_ok "Run 'mobius onboard' to configure keys and settings."
+msg_ok "Run 'mobius onboarding' to configure keys and settings."

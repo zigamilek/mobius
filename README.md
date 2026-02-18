@@ -68,6 +68,23 @@ mobius
 mobius --version
 ```
 
+### CLI Commands
+
+Common Mobius CLI commands:
+
+```bash
+mobius onboarding                 # interactive setup (with overwrite confirmation)
+mobius version                    # print version
+mobius paths                      # print config/env/prompts/log paths
+mobius diagnostics                # print curl checks and detected local IP
+mobius status                     # systemd status (LXC/server)
+mobius start                      # systemd start   (LXC/server)
+mobius stop                       # systemd stop    (LXC/server)
+mobius restart                    # systemd restart (LXC/server)
+mobius logs --follow              # journal logs (default source)
+mobius logs --file --follow       # file logs from configured log path
+```
+
 ### Local Debug Modes
 
 You can control debug verbosity and output using config or env overrides.
@@ -271,7 +288,7 @@ sudo systemctl restart mobius
 After install, run:
 
 ```bash
-mobius onboard
+mobius onboarding
 ```
 
 It will guide you through:

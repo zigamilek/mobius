@@ -187,7 +187,7 @@ EOF
   verify_service_start "${SERVICE_NAME}"
   msg_ok "Updated successfully"
 
-  msg_ok "Use 'mobius onboard' to update env/config interactively."
+  msg_ok "Use 'mobius onboarding' to update env/config interactively."
   exit
 }
 
