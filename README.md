@@ -175,6 +175,7 @@ mobius status                     # systemd status (LXC/server)
 mobius start                      # systemd start   (LXC/server)
 mobius stop                       # systemd stop    (LXC/server)
 mobius restart                    # systemd restart (LXC/server)
+mobius update                     # run in-LXC updater (same flow as one-liner)
 mobius logs --follow              # journal logs (default source)
 mobius logs --file --follow       # file logs from configured log path
 ```
@@ -291,7 +292,13 @@ This installer follows the same lifecycle pattern as tteck/community-scripts:
 
 ### Update from inside the LXC (same command)
 
-Run inside the container:
+Run inside the container (recommended):
+
+```bash
+mobius update
+```
+
+Equivalent one-liner:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/mobius.sh)"

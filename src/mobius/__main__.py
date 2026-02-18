@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shlex
 import socket
 import subprocess
@@ -14,6 +15,15 @@ from mobius.config import AppConfig, load_config
 from mobius.onboarding import default_config_path, default_env_path, run_onboarding
 
 SERVICE_NAME = "mobius"
+DEFAULT_REPO_URL = "https://github.com/zigamilek/mobius.git"
+DEFAULT_RAW_REPO_PATH = "zigamilek/mobius"
+DEFAULT_REPO_REF = "master"
+GITHUB_HTTPS_RE = re.compile(
+    r"^https://github\.com/(?P<path>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
+)
+GITHUB_SSH_RE = re.compile(
+    r"^git@github\.com:(?P<path>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?$"
+)
 
 
 def _resolve_config_path(config_path: str | None) -> Path:
@@ -66,6 +76,110 @@ def _run_command(command: list[str]) -> int:
         return subprocess.run(command, check=False).returncode
     except FileNotFoundError:
         print(f"Command not found: {command[0]}")
+        return 127
+
+
+def _raw_repo_path_from_origin_url(origin_url: str | None) -> str | None:
+    if not origin_url:
+        return None
+    value = origin_url.strip()
+    if not value:
+        return None
+    https_match = GITHUB_HTTPS_RE.match(value)
+    if https_match:
+        return str(https_match.group("path"))
+    ssh_match = GITHUB_SSH_RE.match(value)
+    if ssh_match:
+        return str(ssh_match.group("path"))
+    return None
+
+
+def _detect_origin_url_from_checkout() -> str | None:
+    repo_root = Path(__file__).resolve().parents[2]
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        return None
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo_root), "config", "--get", "remote.origin.url"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+    if completed.returncode != 0:
+        return None
+    value = completed.stdout.strip()
+    return value or None
+
+
+def _resolve_update_sources(
+    *,
+    explicit_raw_repo_path: str | None,
+    explicit_repo_url: str | None,
+    explicit_repo_ref: str | None,
+) -> tuple[str, str, str]:
+    detected_origin = _detect_origin_url_from_checkout()
+    detected_raw_path = _raw_repo_path_from_origin_url(detected_origin)
+
+    raw_repo_path = (
+        (explicit_raw_repo_path or "").strip()
+        or os.getenv("RAW_REPO_PATH", "").strip()
+        or detected_raw_path
+        or DEFAULT_RAW_REPO_PATH
+    )
+    repo_url = (
+        (explicit_repo_url or "").strip()
+        or os.getenv("REPO_URL", "").strip()
+        or detected_origin
+        or f"https://github.com/{raw_repo_path}.git"
+        or DEFAULT_REPO_URL
+    )
+    repo_ref = (
+        (explicit_repo_ref or "").strip()
+        or os.getenv("REPO_REF", "").strip()
+        or DEFAULT_REPO_REF
+    )
+    return raw_repo_path, repo_url, repo_ref
+
+
+def _cmd_update(args: argparse.Namespace) -> int:
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        print("mobius update should be run as root (or with sudo) inside LXC.")
+        return 1
+
+    raw_repo_path, repo_url, repo_ref = _resolve_update_sources(
+        explicit_raw_repo_path=getattr(args, "raw_repo_path", None),
+        explicit_repo_url=getattr(args, "repo_url", None),
+        explicit_repo_ref=getattr(args, "repo_ref", None),
+    )
+    script_url = f"https://raw.githubusercontent.com/{raw_repo_path}/{repo_ref}/ct/mobius.sh"
+    command = ["bash", "-c", f"curl -fsSL \"{script_url}\" | bash"]
+
+    print("")
+    print("Mobius Update")
+    print("=============")
+    print(f"Repo URL:      {repo_url}")
+    print(f"Repo ref:      {repo_ref}")
+    print(f"Raw repo path: {raw_repo_path}")
+    print(f"Installer URL: {script_url}")
+    print("")
+    print(f"Running: {shlex.join(command)}")
+
+    if bool(getattr(args, "dry_run", False)):
+        print("Dry run only. No update executed.")
+        return 0
+
+    env = os.environ.copy()
+    env["REPO_URL"] = repo_url
+    env["REPO_REF"] = repo_ref
+    env["RAW_REPO_PATH"] = raw_repo_path
+
+    try:
+        return subprocess.run(command, env=env, check=False).returncode
+    except FileNotFoundError as exc:
+        print(f"Update failed: missing command ({exc}).")
         return 127
 
 
@@ -256,6 +370,30 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     logs_parser.add_argument("--file", action="store_true", help="Read logs from file")
     logs_parser.add_argument("--config", dest="config_path", default=None)
+
+    update_parser = subparsers.add_parser(
+        "update", help="Update Mobius from inside LXC"
+    )
+    update_parser.add_argument(
+        "--repo-ref",
+        default=None,
+        help="Git ref (branch/tag) to update from (default: master)",
+    )
+    update_parser.add_argument(
+        "--repo-url",
+        default=None,
+        help="Git repository URL used by updater",
+    )
+    update_parser.add_argument(
+        "--raw-repo-path",
+        default=None,
+        help="GitHub owner/repo path for raw installer URL",
+    )
+    update_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print resolved update command without running it",
+    )
     return parser
 
 
@@ -287,6 +425,8 @@ def main() -> None:
         raise SystemExit(_cmd_service("status"))
     if command == "logs":
         raise SystemExit(_cmd_logs(args))
+    if command == "update":
+        raise SystemExit(_cmd_update(args))
 
     # When no subcommand is passed, argparse does not populate serve-only fields
     # like host/port. Fall back to config values in that case.
