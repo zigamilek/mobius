@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -126,12 +127,33 @@ class LoggingConfig(StrictConfigModel):
     include_payloads: bool = False
 
 
+class RuntimeConfig(StrictConfigModel):
+    inject_current_timestamp: bool = True
+    timezone: str = "Europe/Ljubljana"
+    include_timestamp_in_routing: bool = False
+
+    @field_validator("timezone")
+    @classmethod
+    def _validate_timezone(cls, value: str) -> str:
+        timezone_name = value.strip()
+        if not timezone_name:
+            raise ValueError("runtime.timezone must not be empty.")
+        try:
+            ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(
+                f"Unknown timezone '{timezone_name}'. Use an IANA timezone name."
+            ) from exc
+        return timezone_name
+
+
 class AppConfig(StrictConfigModel):
     server: ServerConfig = Field(...)
     providers: ProvidersConfig = Field(...)
     models: ModelsConfig = Field(...)
     api: ApiConfig = Field(...)
     specialists: SpecialistsConfig = Field(...)
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 

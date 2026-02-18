@@ -54,6 +54,24 @@ For non-general routes, the assistant response starts with:
 
 `*Answered by the <specialist> specialist.*`
 
+### Current Timestamp Context
+
+Mobius can inject the current date/time into the system context on every
+request, so the active specialist always sees an authoritative timestamp.
+
+Default:
+
+```yaml
+runtime:
+  inject_current_timestamp: true
+  timezone: Europe/Ljubljana
+  include_timestamp_in_routing: false
+```
+
+- `inject_current_timestamp`: include timestamp in orchestrated response prompt
+- `timezone`: IANA timezone used to format the timestamp
+- `include_timestamp_in_routing`: also include timestamp in routing classifier context
+
 ## Run Locally
 
 ```bash
@@ -270,6 +288,11 @@ specialists:
     personal_development:
       model: gpt-5.2
       prompt_file: personal_development.md
+
+runtime:
+  inject_current_timestamp: true
+  timezone: Europe/Ljubljana
+  include_timestamp_in_routing: false
 ```
 
 The master routing orchestrator prompt is:

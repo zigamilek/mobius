@@ -14,6 +14,7 @@ from mobius.orchestration.specialist_router import SpecialistRouter
 from mobius.orchestration.specialists import SpecialistProfile, get_specialist
 from mobius.prompts.manager import PromptManager
 from mobius.providers.litellm_router import LiteLLMRouter
+from mobius.runtime_context import timestamp_context_line
 
 
 @dataclass
@@ -59,6 +60,9 @@ class Orchestrator:
             self.config.api.allow_provider_model_passthrough
         )
         self.provider_model_ids = set(self.llm_router.list_models())
+
+    def _timestamp_context_line(self) -> str:
+        return timestamp_context_line(self.config.runtime.timezone)
 
     async def _decide_routing(
         self, user_text: str, requested_model: str | None
@@ -118,12 +122,18 @@ class Orchestrator:
 
     def _build_system_prompt(self, selected: list[SpecialistProfile]) -> str:
         if not selected:
-            return self.prompt_manager.get("general")
-        lines = [self.prompt_manager.get("orchestrator"), "", "Specialist instructions:"]
-        for specialist in selected:
-            lines.append(f"- {specialist.label} ({specialist.domain}):")
-            lines.append(self.prompt_manager.get(specialist.domain))
-        return "\n".join(lines)
+            prompt = self.prompt_manager.get("general")
+        else:
+            lines = [self.prompt_manager.get("orchestrator"), "", "Specialist instructions:"]
+            for specialist in selected:
+                lines.append(f"- {specialist.label} ({specialist.domain}):")
+                lines.append(self.prompt_manager.get(specialist.domain))
+            prompt = "\n".join(lines)
+
+        if not self.config.runtime.inject_current_timestamp:
+            return prompt
+
+        return f"{self._timestamp_context_line()}\n\n{prompt}"
 
     @staticmethod
     def _answered_by_prefix(domain: str) -> str:

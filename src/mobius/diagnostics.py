@@ -44,6 +44,11 @@ def diagnostics_payload(
         "models": llm_router.list_models(),
         "config": {
             "orchestrator_model": config.models.orchestrator,
+            "runtime": {
+                "inject_current_timestamp": config.runtime.inject_current_timestamp,
+                "timezone": config.runtime.timezone,
+                "include_timestamp_in_routing": config.runtime.include_timestamp_in_routing,
+            },
             "prompts": prompt_config,
             "logging": {
                 "level": config.logging.level,

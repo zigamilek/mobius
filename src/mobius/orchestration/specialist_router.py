@@ -9,6 +9,7 @@ from mobius.config import AppConfig
 from mobius.logging_setup import get_logger
 from mobius.orchestration.specialists import SPECIALISTS, get_specialist, normalize_domain
 from mobius.providers.litellm_router import LiteLLMRouter
+from mobius.runtime_context import timestamp_context_line
 
 JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
 
@@ -103,6 +104,14 @@ class SpecialistRouter:
             "Allowed specialists:\n"
             f"{specialist_lines}"
         )
+        if (
+            self.config.runtime.inject_current_timestamp
+            and self.config.runtime.include_timestamp_in_routing
+        ):
+            system_prompt = (
+                f"{timestamp_context_line(self.config.runtime.timezone)}\n\n"
+                f"{system_prompt}"
+            )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},

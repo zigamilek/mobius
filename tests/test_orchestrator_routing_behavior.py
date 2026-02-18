@@ -159,6 +159,8 @@ def test_non_general_response_has_specialist_prefix_and_uses_domain_model() -> N
     assert content.startswith("*Answered by the health specialist.*\n\n")
     assert "Do wrist extensor isometrics daily." in content
     assert llm_router.calls[0]["primary_model"] == "gpt-4o-mini"
+    system_prompt = str(llm_router.calls[0]["messages"][0]["content"])
+    assert "Current timestamp:" in system_prompt
 
 
 def test_general_response_has_no_specialist_prefix() -> None:
@@ -172,6 +174,25 @@ def test_general_response_has_no_specialist_prefix() -> None:
     assert not content.startswith("Answered by the")
     assert content.startswith("Let's make a weekly plan.")
     assert llm_router.calls[0]["primary_model"] == "gpt-4o-mini"
+    system_prompt = str(llm_router.calls[0]["messages"][0]["content"])
+    assert "Current timestamp:" in system_prompt
+
+
+def test_timestamp_can_be_disabled_for_orchestrated_response_prompt() -> None:
+    cfg = _config()
+    cfg.runtime.inject_current_timestamp = False
+    llm_router = StubLLMRouter(answer_text="ok")
+    specialist_router = StubSpecialistRouter(domain="general")
+    orchestrator = Orchestrator(
+        config=cfg,
+        llm_router=llm_router,  # type: ignore[arg-type]
+        specialist_router=specialist_router,  # type: ignore[arg-type]
+        prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
+    )
+    request = _request([{"role": "user", "content": "Help me plan my day."}])
+    asyncio.run(orchestrator.complete_non_stream(request))
+    system_prompt = str(llm_router.calls[0]["messages"][0]["content"])
+    assert "Current timestamp:" not in system_prompt
 
 
 def test_routing_uses_latest_user_message_only() -> None:

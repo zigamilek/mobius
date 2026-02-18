@@ -151,3 +151,31 @@ def test_orchestrator_tries_openai_prefix_for_gpt_models() -> None:
         "gpt-5-nano-2025-08-07",
         "openai/gpt-5-nano-2025-08-07",
     ]
+
+
+def test_routing_does_not_include_timestamp_by_default() -> None:
+    query = "Help me structure my weekly goals."
+    llm = StubLLMRouter(
+        outputs=[
+            '{"specialist":"personal_development","confidence":0.84,"reason":"goals and planning"}'
+        ]
+    )
+    router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
+    asyncio.run(router.classify(query))
+    system_prompt = str(llm.calls[0]["messages"][0]["content"])
+    assert "Current timestamp:" not in system_prompt
+
+
+def test_routing_can_include_timestamp_when_enabled() -> None:
+    query = "Should I call my parents more often?"
+    llm = StubLLMRouter(
+        outputs=[
+            '{"specialist":"relationships","confidence":0.78,"reason":"family relationship context"}'
+        ]
+    )
+    config = _config()
+    config.runtime.include_timestamp_in_routing = True
+    router = SpecialistRouter(config=config, llm_router=llm)  # type: ignore[arg-type]
+    asyncio.run(router.classify(query))
+    system_prompt = str(llm.calls[0]["messages"][0]["content"])
+    assert "Current timestamp:" in system_prompt

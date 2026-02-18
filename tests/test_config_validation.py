@@ -74,3 +74,10 @@ def test_config_forbids_unknown_keys() -> None:
     payload["models"]["unknown"] = "value"
     with pytest.raises(ValidationError):
         AppConfig.model_validate(payload)
+
+
+def test_runtime_rejects_invalid_timezone_name() -> None:
+    payload = deepcopy(_valid_config())
+    payload["runtime"] = {"timezone": "Mars/OlympusMons"}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)

@@ -45,6 +45,11 @@ specialists:
       model: gpt-5.2
       prompt_file: personal_development.md
 
+runtime:
+  inject_current_timestamp: true
+  timezone: Europe/Ljubljana
+  include_timestamp_in_routing: false
+
 diagnostics:
   enabled: true
   endpoints:
