@@ -59,9 +59,28 @@ Routing continuity is sticky across conversation history:
   to switch (or the topic clearly shifts)
 - continuity does not parse `Answered by ...`; that prefix is UI-only
 
-For non-general routes, the assistant response starts with:
+For non-general routes, by default the assistant response starts with:
 
-`*Answered by the <specialist> specialist.*`
+`*Answered by <display_name> (the <specialist> specialist) using <model> model.*`
+
+This is configurable via `api.attribution`:
+
+```yaml
+api:
+  attribution:
+    enabled: true
+    include_model: true
+    include_general: false
+    template: "Answered by {display_name} (the {domain_label} specialist){model_suffix}."
+```
+
+Template placeholders:
+
+- `{display_name}`: specialist display name (from `specialists.by_domain.<domain>.display_name`)
+- `{domain}`: normalized domain key (for example `personal_development`)
+- `{domain_label}`: human label form (for example `personal development`)
+- `{model}`: model used for the response turn
+- `{model_suffix}`: either ` using <model> model` or empty (depends on `include_model`)
 
 ### Current Timestamp Context
 
@@ -274,6 +293,13 @@ Prompts are loaded from markdown files in:
 Config location:
 
 ```yaml
+api:
+  attribution:
+    enabled: true
+    include_model: true
+    include_general: false
+    template: "Answered by {display_name} (the {domain_label} specialist){model_suffix}."
+
 specialists:
   prompts_directory: ./system_prompts
   auto_reload: true
@@ -282,21 +308,27 @@ specialists:
     general:
       model: gpt-5.2
       prompt_file: general.md
+      display_name: The Generalist
     health:
       model: gpt-5.2
       prompt_file: health.md
+      display_name: The Healer
     parenting:
       model: gpt-5.2
       prompt_file: parenting.md
+      display_name: The Coach
     relationships:
       model: gpt-5.2
       prompt_file: relationships.md
+      display_name: The Mediator
     homelab:
       model: gpt-5.2
       prompt_file: homelab.md
+      display_name: The Builder
     personal_development:
       model: gpt-5.2
       prompt_file: personal_development.md
+      display_name: The Mentor
 
 runtime:
   inject_current_timestamp: true
@@ -310,6 +342,8 @@ The master routing orchestrator prompt is:
 
 When `auto_reload: true`, prompt edits are reloaded automatically on next request.
 If you changed `config.yaml` itself, restart the service.
+
+`display_name` is optional. If omitted, Mobius falls back to the catalog label for that specialist.
 
 ```bash
 sudo systemctl restart mobius

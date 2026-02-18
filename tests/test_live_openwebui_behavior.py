@@ -16,7 +16,10 @@ from mobius.orchestration.specialist_router import SpecialistRouter
 from mobius.prompts.manager import PromptManager
 from mobius.providers.litellm_router import LiteLLMRouter
 
-PREFIX_RE = re.compile(r"^\*Answered by the (?P<label>.+?) specialist\.\*$")
+PREFIX_RE = re.compile(
+    r"^\*Answered by (?P<display_name>.+?) \(the (?P<domain_label>.+?) specialist\)(?: using (?P<model>.+?) model)?\.\*$"
+)
+LEGACY_PREFIX_RE = re.compile(r"^\*Answered by the (?P<label>.+?) specialist\.\*$")
 
 
 def _live_enabled() -> bool:
@@ -155,9 +158,12 @@ def _parse_specialist_from_response(content: str) -> str:
     if not lines:
         return "unknown"
     match = PREFIX_RE.match(lines[0])
-    if not match:
-        return "general"
-    return match.group("label").strip().replace(" ", "_")
+    if match:
+        return match.group("domain_label").strip().replace(" ", "_")
+    legacy = LEGACY_PREFIX_RE.match(lines[0])
+    if legacy:
+        return legacy.group("label").strip().replace(" ", "_")
+    return "general"
 
 
 @pytest.mark.live

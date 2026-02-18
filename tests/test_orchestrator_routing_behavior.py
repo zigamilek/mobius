@@ -110,20 +110,35 @@ def _config() -> AppConfig:
                 "prompts_directory": "./system_prompts",
                 "orchestrator_prompt_file": "_orchestrator.md",
                 "by_domain": {
-                    "general": {"model": "gpt-4o-mini", "prompt_file": "general.md"},
-                    "health": {"model": "gpt-4o-mini", "prompt_file": "health.md"},
+                    "general": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "general.md",
+                        "display_name": "The Generalist",
+                    },
+                    "health": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "health.md",
+                        "display_name": "The Healer",
+                    },
                     "parenting": {
                         "model": "gpt-4o-mini",
                         "prompt_file": "parenting.md",
+                        "display_name": "The Coach",
                     },
                     "relationships": {
                         "model": "gpt-4o-mini",
                         "prompt_file": "relationships.md",
+                        "display_name": "The Mediator",
                     },
-                    "homelab": {"model": "gemini-2.5-flash", "prompt_file": "homelab.md"},
+                    "homelab": {
+                        "model": "gemini-2.5-flash",
+                        "prompt_file": "homelab.md",
+                        "display_name": "The Builder",
+                    },
                     "personal_development": {
                         "model": "gpt-4o-mini",
                         "prompt_file": "personal_development.md",
+                        "display_name": "The Mentor",
                     },
                 },
             },
@@ -176,7 +191,9 @@ def test_non_general_response_has_specialist_prefix_and_uses_domain_model() -> N
     )
     response = asyncio.run(orchestrator.complete_non_stream(request))
     content = response["choices"][0]["message"]["content"]
-    assert content.startswith("*Answered by the health specialist.*\n\n")
+    assert content.startswith(
+        "*Answered by The Healer (the health specialist) using gpt-4o-mini model.*\n\n"
+    )
     assert "Do wrist extensor isometrics daily." in content
     assert llm_router.calls[0]["primary_model"] == "gpt-4o-mini"
     system_prompt = str(llm_router.calls[0]["messages"][0]["content"])
@@ -191,11 +208,51 @@ def test_general_response_has_no_specialist_prefix() -> None:
     request = _request([{"role": "user", "content": "Help me plan my week."}])
     response = asyncio.run(orchestrator.complete_non_stream(request))
     content = response["choices"][0]["message"]["content"]
-    assert not content.startswith("Answered by the")
+    assert not content.startswith("*Answered by ")
     assert content.startswith("Let's make a weekly plan.")
     assert llm_router.calls[0]["primary_model"] == "gpt-4o-mini"
     system_prompt = str(llm_router.calls[0]["messages"][0]["content"])
     assert "Current timestamp:" in system_prompt
+
+
+def test_attribution_can_disable_model_suffix() -> None:
+    cfg = _config()
+    cfg.api.attribution.include_model = False
+    llm_router = StubLLMRouter(answer_text="Do rehab exercises.")
+    specialist_router = StubSpecialistRouter(domain="health")
+    orchestrator = Orchestrator(
+        config=cfg,
+        llm_router=llm_router,  # type: ignore[arg-type]
+        specialist_router=specialist_router,  # type: ignore[arg-type]
+        prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
+    )
+    request = _request(
+        [{"role": "user", "content": "Can you help with tennis elbow rehab?"}]
+    )
+    response = asyncio.run(orchestrator.complete_non_stream(request))
+    content = str(response["choices"][0]["message"]["content"] or "")
+    assert content.startswith("*Answered by The Healer (the health specialist).*\n\n")
+    assert "using gpt-4o-mini model" not in content
+
+
+def test_attribution_can_be_disabled() -> None:
+    cfg = _config()
+    cfg.api.attribution.enabled = False
+    llm_router = StubLLMRouter(answer_text="Do rehab exercises.")
+    specialist_router = StubSpecialistRouter(domain="health")
+    orchestrator = Orchestrator(
+        config=cfg,
+        llm_router=llm_router,  # type: ignore[arg-type]
+        specialist_router=specialist_router,  # type: ignore[arg-type]
+        prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
+    )
+    request = _request(
+        [{"role": "user", "content": "Can you help with tennis elbow rehab?"}]
+    )
+    response = asyncio.run(orchestrator.complete_non_stream(request))
+    content = str(response["choices"][0]["message"]["content"] or "")
+    assert not content.startswith("*Answered by ")
+    assert content.startswith("Do rehab exercises.")
 
 
 def test_timestamp_can_be_disabled_for_orchestrated_response_prompt() -> None:
@@ -257,7 +314,9 @@ def test_routing_passes_session_domain_history_to_classifier() -> None:
     )
     response = asyncio.run(orchestrator.complete_non_stream(followup_request))
     content = str(response["choices"][0]["message"]["content"] or "")
-    assert content.startswith("*Answered by the homelab specialist.*\n\n")
+    assert content.startswith(
+        "*Answered by The Builder (the homelab specialist) using gemini-2.5-flash model.*\n\n"
+    )
     assert llm_router.calls[-1]["primary_model"] == "gemini-2.5-flash"
     assert specialist_router.classify_calls == 2
     assert specialist_router.latest_seen_current_domain == "homelab"
@@ -284,7 +343,9 @@ def test_sticky_session_resets_when_request_is_first_user_prompt() -> None:
     )
     response = asyncio.run(orchestrator.complete_non_stream(reset_request))
     content = str(response["choices"][0]["message"]["content"] or "")
-    assert content.startswith("*Answered by the homelab specialist.*\n\n")
+    assert content.startswith(
+        "*Answered by The Builder (the homelab specialist) using gemini-2.5-flash model.*\n\n"
+    )
     assert llm_router.calls[-1]["primary_model"] == "gemini-2.5-flash"
     assert specialist_router.latest_seen_text == "Now help with Proxmox backups."
     assert specialist_router.latest_seen_current_domain is None

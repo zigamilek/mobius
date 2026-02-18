@@ -32,3 +32,5 @@ def test_diagnostics_endpoints_are_available() -> None:
     payload = diagnostics.json()
     assert payload["service"] == "mobius"
     assert payload["version"] == __version__
+    assert payload["config"]["api"]["public_model_id"] == "mobius"
+    assert payload["config"]["api"]["attribution"]["enabled"] is True

@@ -219,11 +219,53 @@ class Orchestrator:
         return f"{self._timestamp_context_line()}\n\n{prompt}"
 
     @staticmethod
-    def _answered_by_prefix(domain: str) -> str:
-        if domain == "general":
+    def _default_display_name_for_domain(domain: str) -> str:
+        label = get_specialist(domain).label.strip()
+        suffix = " specialist"
+        if label.lower().endswith(suffix):
+            return label[: -len(suffix)].strip()
+        return label
+
+    def _answered_by_prefix(self, domain: str, used_model: str | None) -> str:
+        attribution = self.config.api.attribution
+        if not attribution.enabled:
             return ""
-        label = domain.replace("_", " ")
-        return f"*Answered by the {label} specialist.*\n\n"
+        if domain == "general" and not attribution.include_general:
+            return ""
+        specialist_cfg = self.config.specialists.by_domain.get(domain)
+        configured_display_name = (
+            specialist_cfg.display_name.strip()
+            if specialist_cfg is not None and specialist_cfg.display_name
+            else ""
+        )
+        display_name = configured_display_name or self._default_display_name_for_domain(
+            domain
+        )
+        model_name = (used_model or "").strip()
+        if not model_name and specialist_cfg is not None:
+            model_name = specialist_cfg.model
+        if not model_name:
+            model_name = self.config.models.orchestrator
+        domain_label = domain.replace("_", " ")
+        model_suffix = f" using {model_name} model" if attribution.include_model else ""
+        try:
+            rendered = attribution.template.format(
+                display_name=display_name,
+                domain=domain,
+                domain_label=domain_label,
+                model=model_name,
+                model_suffix=model_suffix,
+            )
+        except Exception as exc:
+            self.logger.warning(
+                "Invalid api.attribution.template; using default template error=%s",
+                exc.__class__.__name__,
+            )
+            rendered = (
+                f"Answered by {display_name} (the {domain_label} specialist)"
+                f"{model_suffix}."
+            )
+        return f"*{rendered}*\n\n"
 
     def _build_orchestrated_messages(
         self,
@@ -273,7 +315,7 @@ class Orchestrator:
         response = _chunk_to_dict(raw_response)
         response["model"] = decision.response_model
         assistant_text = self._extract_assistant_text(response)
-        augmented = self._answered_by_prefix(decision.domain) + assistant_text
+        augmented = self._answered_by_prefix(decision.domain, used_model) + assistant_text
         try:
             response["choices"][0]["message"]["content"] = augmented
         except Exception:
@@ -319,7 +361,7 @@ class Orchestrator:
 
         stream_id: str | None = None
         chunk_count = 0
-        prefix = self._answered_by_prefix(decision.domain)
+        prefix = self._answered_by_prefix(decision.domain, used_model)
         prefix_pending = bool(prefix)
         async for chunk in stream:
             as_dict = _chunk_to_dict(chunk)

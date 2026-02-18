@@ -20,6 +20,11 @@ models:
 api:
   public_model_id: mobius
   allow_provider_model_passthrough: false
+  attribution:
+    enabled: true
+    include_model: true
+    include_general: false
+    template: "Answered by {display_name} (the {domain_label} specialist){model_suffix}."
 
 specialists:
   prompts_directory: /etc/mobius/system_prompts
@@ -29,21 +34,27 @@ specialists:
     general:
       model: gpt-5.2
       prompt_file: general.md
+      display_name: The Generalist
     health:
       model: gpt-5.2
       prompt_file: health.md
+      display_name: The Healer
     parenting:
       model: gpt-5.2
       prompt_file: parenting.md
+      display_name: The Coach
     relationships:
       model: gpt-5.2
       prompt_file: relationships.md
+      display_name: The Mediator
     homelab:
       model: gpt-5.2
       prompt_file: homelab.md
+      display_name: The Builder
     personal_development:
       model: gpt-5.2
       prompt_file: personal_development.md
+      display_name: The Mentor
 
 runtime:
   inject_current_timestamp: true

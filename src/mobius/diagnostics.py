@@ -43,6 +43,16 @@ def diagnostics_payload(
         "public_model": config.api.public_model_id,
         "models": llm_router.list_models(),
         "config": {
+            "api": {
+                "public_model_id": config.api.public_model_id,
+                "allow_provider_model_passthrough": config.api.allow_provider_model_passthrough,
+                "attribution": {
+                    "enabled": config.api.attribution.enabled,
+                    "include_model": config.api.attribution.include_model,
+                    "include_general": config.api.attribution.include_general,
+                    "template": config.api.attribution.template,
+                },
+            },
             "orchestrator_model": config.models.orchestrator,
             "runtime": {
                 "inject_current_timestamp": config.runtime.inject_current_timestamp,

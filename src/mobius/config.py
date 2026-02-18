@@ -48,6 +48,7 @@ class ModelsConfig(StrictConfigModel):
 class SpecialistDomainConfig(StrictConfigModel):
     model: str = Field(...)
     prompt_file: str = Field(...)
+    display_name: str | None = None
 
     @field_validator("model", "prompt_file")
     @classmethod
@@ -55,6 +56,16 @@ class SpecialistDomainConfig(StrictConfigModel):
         trimmed = value.strip()
         if not trimmed:
             raise ValueError("Value must not be empty.")
+        return trimmed
+
+    @field_validator("display_name")
+    @classmethod
+    def _display_name_non_empty(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("display_name must not be empty when provided.")
         return trimmed
 
 
@@ -111,9 +122,27 @@ class DiagnosticsConfig(StrictConfigModel):
     )
 
 
+class ApiAttributionConfig(StrictConfigModel):
+    enabled: bool = True
+    include_model: bool = True
+    include_general: bool = False
+    template: str = (
+        "Answered by {display_name} (the {domain_label} specialist){model_suffix}."
+    )
+
+    @field_validator("template")
+    @classmethod
+    def _template_non_empty(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("api.attribution.template must not be empty.")
+        return trimmed
+
+
 class ApiConfig(StrictConfigModel):
     public_model_id: str = Field(...)
     allow_provider_model_passthrough: bool = False
+    attribution: ApiAttributionConfig = Field(default_factory=ApiAttributionConfig)
 
 
 class LoggingConfig(StrictConfigModel):

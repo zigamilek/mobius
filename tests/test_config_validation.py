@@ -81,3 +81,17 @@ def test_runtime_rejects_invalid_timezone_name() -> None:
     payload["runtime"] = {"timezone": "Mars/OlympusMons"}
     with pytest.raises(ValidationError):
         AppConfig.model_validate(payload)
+
+
+def test_specialist_display_name_rejects_empty_string() -> None:
+    payload = deepcopy(_valid_config())
+    payload["specialists"]["by_domain"]["health"]["display_name"] = "   "
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_api_attribution_template_rejects_empty_string() -> None:
+    payload = deepcopy(_valid_config())
+    payload["api"]["attribution"] = {"template": "   "}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
