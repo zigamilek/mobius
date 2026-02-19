@@ -506,7 +506,7 @@ WHERE id = %s
                     )
             except Exception as exc:
                 conn.rollback()
-                self.logger.warning("Failed to write checkin: %s", exc.__class__.__name__)
+                self.logger.warning("Failed to write check-in: %s", exc.__class__.__name__)
                 raise
 
     def write_journal(

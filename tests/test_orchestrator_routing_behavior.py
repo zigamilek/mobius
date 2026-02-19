@@ -402,7 +402,7 @@ def test_state_context_and_footer_are_injected_when_pipeline_is_present() -> Non
         context_text="Active tracks:\n- Lose fat [health] status=active",
         footer_text=(
             "*State writes:*\n"
-            "- checkin: `state/users/alex/checkins/health-lose-fat.md` (applied)"
+            "- check-in: `state/users/alex/checkins/health-lose-fat.md` (applied)"
         ),
     )
     orchestrator = Orchestrator(

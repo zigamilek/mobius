@@ -233,5 +233,6 @@ class StatePipeline:
             else:
                 target = f"state/users/{safe_user}/{item.target}"
             details = f" - {item.details}" if item.details else ""
-            lines.append(f"- {item.channel}: `{target}` ({item.status}){details}")
+            channel_label = "check-in" if item.channel == "checkin" else item.channel
+            lines.append(f"- {channel_label}: `{target}` ({item.status}){details}")
         return "\n".join(lines)
