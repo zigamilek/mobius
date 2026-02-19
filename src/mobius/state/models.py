@@ -16,6 +16,7 @@ class CheckinWrite:
     barriers: list[str] = field(default_factory=list)
     next_actions: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
+    evidence: str = ""
 
 
 @dataclass(frozen=True)
@@ -24,16 +25,14 @@ class JournalWrite:
     title: str
     body_md: str
     domain_hints: list[str] = field(default_factory=list)
+    evidence: str = ""
 
 
 @dataclass(frozen=True)
 class MemoryWrite:
     domain: str
-    title: str
-    summary: str
-    narrative: str = ""
-    confidence: float | None = None
-    tags: list[str] = field(default_factory=list)
+    memory: str
+    evidence: str = ""
 
 
 @dataclass(frozen=True)

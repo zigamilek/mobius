@@ -16,15 +16,7 @@ def _truncate(text: str, *, max_chars: int) -> str:
 
 
 def _memory_text(payload: MemoryWrite) -> str:
-    parts = [
-        f"title: {payload.title}",
-        f"summary: {payload.summary}",
-    ]
-    if payload.narrative.strip():
-        parts.append(f"narrative: {payload.narrative.strip()}")
-    if payload.tags:
-        parts.append(f"tags: {', '.join(payload.tags)}")
-    return "\n".join(parts).strip()
+    return f"memory: {payload.memory.strip()}"
 
 
 def _extract_json_payload(text: str) -> dict[str, Any]:
@@ -160,13 +152,9 @@ class MemoryEngine:
         serialized_candidates: list[str] = []
         for row in shortlist:
             slug = str(row.get("slug") or "").strip()
-            title = str(row.get("title") or "").strip()
-            summary = _truncate(str(row.get("summary") or ""), max_chars=max_candidate_chars)
-            narrative = _truncate(
-                str(row.get("narrative") or ""), max_chars=max_candidate_chars
-            )
+            memory = _truncate(str(row.get("memory") or ""), max_chars=max_candidate_chars)
             serialized_candidates.append(
-                f"- slug={slug} | title={title} | summary={summary} | narrative={narrative}"
+                f"- slug={slug} | memory={memory}"
             )
         candidates_block = "\n".join(serialized_candidates)
 

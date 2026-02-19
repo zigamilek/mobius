@@ -230,7 +230,7 @@ LIMIT %s
 
                 cursor.execute(
                     """
-SELECT domain, slug, title, summary, occurrences, last_seen
+SELECT domain, slug, memory, occurrences, last_seen
 FROM memory_cards
 WHERE user_id = %s
 ORDER BY
@@ -605,16 +605,13 @@ RETURNING id
         source_excerpt: str,
         merge_slug: str | None = None,
     ) -> WriteSummaryItem:
-        memory_slug = merge_slug or _slugify(payload.title, fallback="user-memory")
+        memory_text = payload.memory.strip() or source_excerpt.strip() or "Memory"
+        memory_slug = merge_slug or _slugify(memory_text, fallback="user-memory")
         target = f"memories/{payload.domain}.md"
         payload_hash = _payload_hash(
             {
                 "domain": payload.domain,
-                "title": payload.title,
-                "summary": payload.summary,
-                "narrative": payload.narrative,
-                "confidence": payload.confidence,
-                "tags": payload.tags,
+                "memory": memory_text,
             }
         )
         now = datetime.now(timezone.utc)
@@ -640,7 +637,7 @@ RETURNING id
 
                     cursor.execute(
                         """
-SELECT id, occurrences, narrative
+SELECT id, occurrences
 FROM memory_cards
 WHERE user_id = %s AND domain = %s AND slug = %s
 FOR UPDATE
@@ -651,38 +648,20 @@ FOR UPDATE
                     if existing:
                         memory_id = str(existing["id"])
                         occurrences = int(existing["occurrences"] or 1) + 1
-                        existing_narrative = str(existing["narrative"] or "").strip()
-                        new_narrative_piece = payload.narrative.strip()
-                        if new_narrative_piece:
-                            merged_narrative = (
-                                f"{existing_narrative}\n\n- {now.isoformat()}: {new_narrative_piece}"
-                                if existing_narrative
-                                else f"- {now.isoformat()}: {new_narrative_piece}"
-                            )
-                        else:
-                            merged_narrative = existing_narrative
                         cursor.execute(
                             """
 UPDATE memory_cards
-SET title = %s,
-    summary = %s,
-    narrative = %s,
+SET memory = %s,
     last_seen = %s,
     occurrences = %s,
-    confidence = %s,
-    tags = %s::jsonb,
     source_turn_id = %s,
     updated_at = NOW()
 WHERE id = %s
 """,
                             (
-                                payload.title,
-                                payload.summary,
-                                merged_narrative,
+                                memory_text,
                                 now,
                                 occurrences,
-                                payload.confidence,
-                                json.dumps(payload.tags),
                                 turn_id,
                                 memory_id,
                             ),
@@ -694,14 +673,10 @@ INSERT INTO memory_cards(
     user_id,
     domain,
     slug,
-    title,
-    summary,
-    narrative,
+    memory,
     first_seen,
     last_seen,
     occurrences,
-    confidence,
-    tags,
     source_turn_id
 )
 VALUES (
@@ -711,11 +686,7 @@ VALUES (
     %s,
     %s,
     %s,
-    %s,
-    %s,
     1,
-    %s,
-    %s::jsonb,
     %s
 )
 RETURNING id
@@ -724,13 +695,9 @@ RETURNING id
                                 user_id,
                                 payload.domain,
                                 memory_slug,
-                                payload.title,
-                                payload.summary,
-                                payload.narrative,
+                                memory_text,
                                 now,
                                 now,
-                                payload.confidence,
-                                json.dumps(payload.tags),
                                 turn_id,
                             ),
                         )
@@ -747,7 +714,11 @@ INSERT INTO memory_evidence(
 )
 VALUES (%s, 'turn_event', %s, %s)
 """,
-                        (memory_id, turn_id, source_excerpt[:512]),
+                        (
+                            memory_id,
+                            turn_id,
+                            (payload.evidence.strip() or source_excerpt)[:512],
+                        ),
                     )
                     self._finish_write_operation(
                         cursor,
@@ -775,7 +746,7 @@ VALUES (%s, 'turn_event', %s, %s)
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-SELECT id, domain, slug, title, summary, narrative, occurrences, last_seen, updated_at
+SELECT id, domain, slug, memory, occurrences, last_seen, updated_at
 FROM memory_cards
 WHERE user_id = %s AND domain = %s
 ORDER BY last_seen DESC
@@ -805,9 +776,7 @@ SELECT
     m.id,
     m.domain,
     m.slug,
-    m.title,
-    m.summary,
-    m.narrative,
+    m.memory,
     m.occurrences,
     m.last_seen,
     (s.embedding <=> %s::vector) AS distance
@@ -840,7 +809,7 @@ LIMIT %s
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-SELECT id, user_id, domain, slug, title, summary, narrative, occurrences, updated_at
+SELECT id, user_id, domain, slug, memory, occurrences, updated_at
 FROM memory_cards
 WHERE user_id = %s AND id = %s
 """,
@@ -948,8 +917,8 @@ ORDER BY entry_ts DESC
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-SELECT id, domain, slug, title, summary, narrative, status, first_seen, last_seen,
-       occurrences, confidence, tags, created_at, updated_at
+SELECT id, domain, slug, memory, first_seen, last_seen,
+       occurrences, created_at, updated_at
 FROM memory_cards
 WHERE user_id = %s
 ORDER BY domain ASC, last_seen DESC

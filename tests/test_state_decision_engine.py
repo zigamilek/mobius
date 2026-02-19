@@ -4,6 +4,8 @@ import asyncio
 import json
 from typing import Any
 
+import pytest
+
 from mobius.config import AppConfig
 from mobius.state.decision_engine import StateDecisionEngine
 from mobius.state.models import StateContextSnapshot
@@ -124,26 +126,24 @@ def test_model_json_can_trigger_all_three_write_types() -> None:
             "title": "Lose fat",
             "summary": "Started focused fat-loss plan.",
             "outcome": "partial",
-            "confidence": 0.84,
             "wins": ["Committed to meal prep"],
             "barriers": ["Late-night snacking"],
             "next_actions": ["Prepare tomorrow meals in advance"],
             "tags": ["fat_loss"],
+            "evidence": "Today I decided I'll finally lose fat.",
         },
         "journal": {
             "write": True,
             "title": "Lose fat commitment",
             "body_md": "Today I committed to a consistent fat-loss process.",
             "domain_hints": ["health"],
+            "evidence": "Today I decided I'll finally lose fat.",
         },
         "memory": {
             "write": True,
             "domain": "health",
-            "title": "Recurring fat-loss goal",
-            "summary": "User repeatedly re-commits to losing fat.",
-            "narrative": "Pattern appears repeatedly over months.",
-            "confidence": 0.79,
-            "tags": ["fat_loss", "recurring_goal"],
+            "memory": "I want to lose fat.",
+            "evidence": "Today I decided I'll finally lose fat.",
         },
         "reason": "explicit_goal_signal",
     }
@@ -176,11 +176,11 @@ def test_invalid_json_is_retried_and_second_attempt_succeeds() -> None:
             "title": "Lose fat",
             "summary": "Progressing.",
             "outcome": "partial",
-            "confidence": 0.7,
             "wins": [],
             "barriers": [],
             "next_actions": [],
             "tags": [],
+            "evidence": "fat-loss progress",
         },
         "journal": {
             "write": False,
@@ -191,11 +191,8 @@ def test_invalid_json_is_retried_and_second_attempt_succeeds() -> None:
         "memory": {
             "write": False,
             "domain": "",
-            "title": "",
-            "summary": "",
-            "narrative": "",
-            "confidence": None,
-            "tags": [],
+            "memory": "",
+            "evidence": "",
         },
         "reason": "checkin_only",
     }
@@ -216,3 +213,138 @@ def test_invalid_json_is_retried_and_second_attempt_succeeds() -> None:
     assert decision.checkin is not None
     assert decision.journal is None
     assert decision.memory is None
+
+
+def _base_decision_payload() -> dict[str, Any]:
+    return {
+        "checkin": {
+            "write": False,
+            "domain": "",
+            "track_type": "goal",
+            "title": "",
+            "summary": "",
+            "outcome": "note",
+            "wins": [],
+            "barriers": [],
+            "next_actions": [],
+            "tags": [],
+            "evidence": "",
+        },
+        "journal": {
+            "write": False,
+            "title": "",
+            "body_md": "",
+            "domain_hints": [],
+            "evidence": "",
+        },
+        "memory": {
+            "write": False,
+            "domain": "",
+            "memory": "",
+            "evidence": "",
+        },
+        "reason": "matrix",
+    }
+
+
+@pytest.mark.parametrize(
+    ("enabled_channels", "query"),
+    [
+        ({"memory"}, "I am lactose intolerant."),
+        ({"journal"}, "Today we visited the technical museum with the family."),
+        (
+            {"checkin"},
+            "Fat-loss check-in: this week I trained 4 times and broke nutrition twice.",
+        ),
+        ({"memory", "journal"}, "Today I decided I'll finally try to lose some fat."),
+        (
+            {"memory", "checkin"},
+            "For months I have been eating sweets late at night; please track this with me.",
+        ),
+        (
+            {"journal", "checkin"},
+            "Today's check-in: I stayed within calories but skipped training.",
+        ),
+        (
+            {"memory", "journal", "checkin"},
+            "Today I decided to quit smoking for good; this is day 1 and I want coaching.",
+        ),
+    ],
+)
+def test_positive_write_combination_matrix(
+    enabled_channels: set[str], query: str
+) -> None:
+    cfg = _config()
+    payload = _base_decision_payload()
+    if "checkin" in enabled_channels:
+        payload["checkin"] = {
+            "write": True,
+            "domain": "health",
+            "track_type": "goal",
+            "title": "Health check-in",
+            "summary": query,
+            "outcome": "partial",
+            "wins": [],
+            "barriers": [],
+            "next_actions": [],
+            "tags": [],
+            "evidence": query,
+        }
+    if "journal" in enabled_channels:
+        payload["journal"] = {
+            "write": True,
+            "title": "Daily entry",
+            "body_md": query,
+            "domain_hints": ["health"],
+            "evidence": query,
+        }
+    if "memory" in enabled_channels:
+        payload["memory"] = {
+            "write": True,
+            "domain": "health",
+            "memory": query,
+            "evidence": query,
+        }
+    engine = StateDecisionEngine(
+        config=cfg,
+        llm_router=StubLLMRouter(payload),  # type: ignore[arg-type]
+    )
+    decision = asyncio.run(
+        engine.decide(
+            user_text=query,
+            assistant_text="Thanks for sharing.",
+            routed_domain="health",
+            context=StateContextSnapshot(),
+        )
+    )
+    assert (decision.checkin is not None) is ("checkin" in enabled_channels)
+    assert (decision.journal is not None) is ("journal" in enabled_channels)
+    assert (decision.memory is not None) is ("memory" in enabled_channels)
+
+
+def test_negative_matrix_generic_qna_can_return_no_writes() -> None:
+    cfg = _config()
+    payload = _base_decision_payload()
+    payload["reason"] = "generic_qna_no_state"
+    engine = StateDecisionEngine(
+        config=cfg,
+        llm_router=StubLLMRouter(payload),  # type: ignore[arg-type]
+    )
+    decision = asyncio.run(
+        engine.decide(
+            user_text="How should I prune currant bushes?",
+            assistant_text="I can help with pruning steps.",
+            routed_domain="health",
+            context=StateContextSnapshot(),
+        )
+    )
+    assert decision.checkin is None
+    assert decision.journal is None
+    assert decision.memory is None
+
+
+def test_prompt_contains_positive_and_negative_matrix_examples() -> None:
+    text = StateDecisionEngine._system_prompt()
+    assert "Canonical positive examples:" in text
+    assert "Canonical negative examples:" in text
+    assert "Today I planted 3 raspberry bushes" in text

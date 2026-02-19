@@ -22,9 +22,7 @@ class FakeStore:
                 "id": "mem-existing-1",
                 "domain": domain,
                 "slug": "lose-fat",
-                "title": "Lose fat",
-                "summary": "User repeatedly aims to lose fat.",
-                "narrative": "Recurring over months.",
+                "memory": "I want to lose fat.",
                 "occurrences": 3,
                 "last_seen": "2026-02-15T10:00:00+00:00",
             }
@@ -44,9 +42,7 @@ class FakeStore:
                 "id": "mem-existing-1",
                 "domain": domain,
                 "slug": "lose-fat",
-                "title": "Lose fat",
-                "summary": "User repeatedly aims to lose fat.",
-                "narrative": "Recurring over months.",
+                "memory": "I want to lose fat.",
                 "distance": 0.12,
             }
         ]
@@ -75,8 +71,7 @@ class FakeStore:
             "id": memory_id,
             "domain": "health",
             "slug": "lose-fat",
-            "title": "Lose fat",
-            "summary": "User repeatedly aims to lose fat.",
+            "memory": "I want to lose fat.",
         }
 
     def upsert_memory_embedding(
@@ -187,11 +182,8 @@ def test_memory_engine_semantic_merge_reuses_existing_slug_and_syncs_embedding()
     )
     payload = MemoryWrite(
         domain="health",
-        title="Lose body fat",
-        summary="User recommits to fat loss goals.",
-        narrative="Recurring signal from multiple check-ins.",
-        confidence=0.76,
-        tags=["fat_loss"],
+        memory="I want to lose body fat.",
+        evidence="Today I decided I'll finally lose fat.",
     )
     item = asyncio.run(
         engine.apply(

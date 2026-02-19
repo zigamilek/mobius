@@ -299,33 +299,17 @@ class ProjectionSync:
 
         for domain, rows in by_domain.items():
             lines = [
-                "---",
-                "schema_version: 1",
-                "generated_by: mobius",
-                f"domain: {domain}",
-                f"updated_at: {datetime.now(timezone.utc).isoformat()}",
-                "---",
-                "",
                 f"# Memories - {domain}",
                 "",
             ]
             for row in rows:
+                memory_text = str(row.get("memory") or "").strip() or "-"
                 lines.extend(
                     [
-                        f"<!-- memory:{row.get('id')} -->",
-                        f"id: {row.get('id')}",
-                        f"slug: {row.get('slug')}",
-                        f"title: {row.get('title')}",
-                        f"summary: {row.get('summary')}",
-                        f"status: {row.get('status')}",
+                        f"memory: {memory_text}",
                         f"first_seen: {_iso(row.get('first_seen'))}",
                         f"last_seen: {_iso(row.get('last_seen'))}",
                         f"occurrences: {row.get('occurrences')}",
-                        f"confidence: {row.get('confidence')}",
-                        f"tags: {row.get('tags')}",
-                        "narrative:",
-                        str(row.get("narrative") or "").strip() or "-",
-                        f"<!-- /memory:{row.get('id')} -->",
                         "",
                     ]
                 )

@@ -180,8 +180,8 @@ class RuntimeConfig(StrictConfigModel):
 class StateDatabaseConfig(StrictConfigModel):
     dsn: str | None = None
     auto_migrate: bool = True
-    min_schema_version: str = "0001"
-    max_schema_version: str = "0001"
+    min_schema_version: str = "0002"
+    max_schema_version: str = "0002"
     connect_timeout_seconds: int = 5
 
     @field_validator("dsn")
@@ -230,6 +230,8 @@ class StateDecisionConfig(StrictConfigModel):
     enabled: bool = True
     model: str = ""
     include_fallbacks: bool = False
+    facts_only: bool = True
+    strict_grounding: bool = True
     max_user_chars: int = 3000
     max_assistant_chars: int = 3000
     max_json_retries: int = 1
@@ -266,7 +268,7 @@ class StateCheckinConfig(StrictConfigModel):
 
 class StateJournalConfig(StrictConfigModel):
     enabled: bool = True
-    include_assistant_excerpt: bool = True
+    include_assistant_excerpt: bool = False
     max_assistant_excerpt_chars: int = 320
     max_domain_hints: int = 4
 
@@ -501,6 +503,18 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     if os.getenv("MOBIUS_STATE_DECISION_ENABLED"):
         config.state.decision.enabled = (
             os.getenv("MOBIUS_STATE_DECISION_ENABLED", "true").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+    if os.getenv("MOBIUS_STATE_DECISION_FACTS_ONLY"):
+        config.state.decision.facts_only = (
+            os.getenv("MOBIUS_STATE_DECISION_FACTS_ONLY", "true").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+    if os.getenv("MOBIUS_STATE_DECISION_STRICT_GROUNDING"):
+        config.state.decision.strict_grounding = (
+            os.getenv("MOBIUS_STATE_DECISION_STRICT_GROUNDING", "true")
+            .strip()
+            .lower()
             in {"1", "true", "yes", "on"}
         )
     if os.getenv("MOBIUS_STATE_DECISION_MAX_JSON_RETRIES"):

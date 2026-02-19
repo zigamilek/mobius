@@ -83,6 +83,17 @@ def _payload_has_required_shape(payload: dict[str, Any]) -> bool:
         write_value = block.get("write")
         if not isinstance(write_value, bool):
             return False
+        if not write_value:
+            continue
+        if block_name == "checkin":
+            required = ("domain", "track_type", "title", "summary", "outcome", "evidence")
+        elif block_name == "journal":
+            required = ("title", "body_md", "evidence")
+        else:
+            required = ("domain", "memory", "evidence")
+        for key in required:
+            if not isinstance(block.get(key), str):
+                return False
     return True
 
 
@@ -247,6 +258,7 @@ class StateDecisionEngine:
             "You are Mobius State Decision Engine.\n"
             "Task: Decide whether to write check-in, daily journal entry, and/or memory "
             "for the current user turn.\n"
+            "You must be conservative, facts-only, and grounded in user text.\n"
             "Output requirements (MANDATORY):\n"
             "- Output EXACTLY one JSON object.\n"
             "- No markdown. No code fences. No commentary.\n"
@@ -260,34 +272,54 @@ class StateDecisionEngine:
             '    "title": string,\n'
             '    "summary": string,\n'
             '    "outcome": "win|partial|miss|note",\n'
-            '    "confidence": number|null,\n'
             '    "wins": string[],\n'
             '    "barriers": string[],\n'
             '    "next_actions": string[],\n'
-            '    "tags": string[]\n'
+            '    "tags": string[],\n'
+            '    "evidence": string\n'
             "  },\n"
             '  "journal": {\n'
             '    "write": boolean,\n'
             '    "title": string,\n'
             '    "body_md": string,\n'
-            '    "domain_hints": string[]\n'
+            '    "domain_hints": string[],\n'
+            '    "evidence": string\n'
             "  },\n"
             '  "memory": {\n'
             '    "write": boolean,\n'
             '    "domain": string,\n'
-            '    "title": string,\n'
-            '    "summary": string,\n'
-            '    "narrative": string,\n'
-            '    "confidence": number|null,\n'
-            '    "tags": string[]\n'
+            '    "memory": string,\n'
+            '    "evidence": string\n'
             "  },\n"
             '  "reason": string\n'
             "}\n"
             "Policy:\n"
             "- One message may trigger 0-3 writes.\n"
-            "- Check-in: progress update tied to a goal/habit/system.\n"
-            "- Journal: meaningful daily narrative.\n"
-            "- Memory: durable preference, recurring pattern, or long-term fact/goal.\n"
+            "- Facts only: never invent details that are not in user text.\n"
+            "- Never persist assistant advice as fact unless user explicitly confirms it.\n"
+            "- For each write=true block, evidence must be an exact quote from user_text.\n"
+            "- If uncertain, set write=false (especially for memory).\n"
+            "- Memory text must be self-contained and explicit; no vague pronouns.\n"
+            "- If latest user text conflicts with an existing durable memory, produce updated memory text (do not add contradictory fact).\n"
+            "- Ignore sarcasm/jokes/non-literal claims for memory unless user explicitly confirms literal intent.\n"
+            "Triage ladder:\n"
+            "1) Memory: durable preferences, recurring patterns, long-term facts/commitments.\n"
+            "2) Check-in: ongoing goal/habit/system plus progress/barrier/accountability/coaching signal.\n"
+            "3) Journal: factual day/event log or short day reflection.\n"
+            "Journal vs Check-in:\n"
+            "- If uncertain between journal and check-in, default to journal.\n"
+            "- One-off daily updates with no ongoing tracking intent are journal-only.\n"
+            "Canonical positive examples:\n"
+            "- 'I am lactose intolerant.' -> memory only.\n"
+            "- 'Today we visited the technical museum with the family.' -> journal only.\n"
+            "- 'Fat-loss check-in: this week I trained 4 times ... keep me on the plan.' -> check-in only.\n"
+            "- 'Today I decided I'll finally try to lose some fat.' -> memory + journal.\n"
+            "- 'For months I have been eating sweets late at night; track this weekly.' -> memory + check-in.\n"
+            "- 'Today's check-in: stayed within calories, skipped training.' -> journal + check-in.\n"
+            "- 'Today I decided to quit smoking for good; day 1, I want daily coaching.' -> all three.\n"
+            "Canonical negative examples:\n"
+            "- 'Today I planted 3 raspberry bushes, 2 currant bushes, and a cherry tree.' -> journal only (not memory, not check-in).\n"
+            "- 'How should I prune currant bushes?' -> no state writes.\n"
             "- If channel is not justified, set write=false and use empty strings/lists.\n"
             "- Keep titles concise and stable.\n"
             "- Keep reason short and specific.\n"
@@ -334,7 +366,7 @@ class StateDecisionEngine:
         max_wins = self.config.state.checkin.max_wins
         max_barriers = self.config.state.checkin.max_barriers
         max_next_actions = self.config.state.checkin.max_next_actions
-        max_tags = self.config.state.memory.max_tags
+        max_tags = 8
 
         checkin_block = payload.get("checkin")
         checkin_write: CheckinWrite | None = None
@@ -358,6 +390,7 @@ class StateDecisionEngine:
                     except Exception:
                         confidence = None
                 track_type = _normalize_track_type(str(checkin_block.get("track_type") or ""))
+                evidence = str(checkin_block.get("evidence") or "").strip()
                 checkin_write = CheckinWrite(
                     domain=checkin_domain or routed_domain,
                     track_type=track_type,
@@ -373,6 +406,7 @@ class StateDecisionEngine:
                         checkin_block.get("next_actions"), limit=max_next_actions
                     ),
                     tags=_normalize_items(checkin_block.get("tags"), limit=max_tags),
+                    evidence=evidence,
                 )
 
         journal_block = payload.get("journal")
@@ -385,6 +419,7 @@ class StateDecisionEngine:
                 body_md = str(journal_block.get("body_md") or "").strip()
                 if not body_md:
                     body_md = source_user_text.strip()
+                evidence = str(journal_block.get("evidence") or "").strip()
                 journal_write = JournalWrite(
                     entry_ts=datetime.now(timezone.utc),
                     title=title,
@@ -393,6 +428,7 @@ class StateDecisionEngine:
                         journal_block.get("domain_hints"),
                         limit=self.config.state.journal.max_domain_hints,
                     ),
+                    evidence=evidence,
                 )
 
         memory_block = payload.get("memory")
@@ -400,27 +436,14 @@ class StateDecisionEngine:
         if self.config.state.memory.enabled and isinstance(memory_block, dict):
             if bool(memory_block.get("write")):
                 memory_domain = str(memory_block.get("domain") or routed_domain).strip()
-                title = str(memory_block.get("title") or "").strip()
-                if not title:
-                    title = _default_title_from_text(source_user_text)
-                summary = str(memory_block.get("summary") or "").strip()
-                if not summary:
-                    summary = _slug_words(source_user_text, max_words=16) or source_user_text
-                narrative = str(memory_block.get("narrative") or "").strip()
-                confidence_raw = memory_block.get("confidence")
-                confidence: float | None = None
-                if confidence_raw is not None:
-                    try:
-                        confidence = max(0.0, min(1.0, float(confidence_raw)))
-                    except Exception:
-                        confidence = None
+                memory_text = str(memory_block.get("memory") or "").strip()
+                if not memory_text:
+                    memory_text = _slug_words(source_user_text, max_words=16) or source_user_text
+                evidence = str(memory_block.get("evidence") or "").strip()
                 memory_write = MemoryWrite(
                     domain=memory_domain or routed_domain,
-                    title=title,
-                    summary=summary,
-                    narrative=narrative,
-                    confidence=confidence,
-                    tags=_normalize_items(memory_block.get("tags"), limit=max_tags),
+                    memory=memory_text,
+                    evidence=evidence,
                 )
 
         reason = str(payload.get("reason") or "").strip()
@@ -456,6 +479,6 @@ class StateDecisionEngine:
             lines.append("recent_memory_cards:")
             for row in context.recent_memory_cards:
                 lines.append(
-                    f"- {row.get('domain')}/{row.get('slug')}: {row.get('summary')}"
+                    f"- {row.get('domain')}/{row.get('slug')}: {row.get('memory')}"
                 )
         return "\n".join(lines) if lines else "none"

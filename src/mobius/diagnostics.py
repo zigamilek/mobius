@@ -94,6 +94,8 @@ def diagnostics_payload(
                     "enabled": config.state.decision.enabled,
                     "model": config.state.decision.model,
                     "include_fallbacks": config.state.decision.include_fallbacks,
+                    "facts_only": config.state.decision.facts_only,
+                    "strict_grounding": config.state.decision.strict_grounding,
                     "max_user_chars": config.state.decision.max_user_chars,
                     "max_assistant_chars": config.state.decision.max_assistant_chars,
                     "max_json_retries": config.state.decision.max_json_retries,

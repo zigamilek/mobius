@@ -2,10 +2,7 @@ from __future__ import annotations
 
 Migration = tuple[str, str]
 
-MIGRATIONS: tuple[Migration, ...] = (
-    (
-        "0001",
-        """
+SCHEMA_SQL = """
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -78,15 +75,10 @@ CREATE TABLE IF NOT EXISTS memory_cards (
     user_id UUID NOT NULL REFERENCES users(id),
     domain TEXT NOT NULL,
     slug TEXT NOT NULL,
-    title TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    narrative TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'active',
+    memory TEXT NOT NULL,
     first_seen TIMESTAMPTZ NOT NULL,
     last_seen TIMESTAMPTZ NOT NULL,
     occurrences INTEGER NOT NULL DEFAULT 1,
-    confidence NUMERIC(4,3) NULL,
-    tags JSONB NOT NULL DEFAULT '[]'::jsonb,
     source_turn_id UUID NULL REFERENCES turn_events(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -161,7 +153,29 @@ CREATE INDEX IF NOT EXISTS idx_write_ops_user_created_desc
     ON write_operations(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_projection_state_user_type_exported_desc
     ON markdown_projection_state(user_id, artifact_type, exported_at DESC);
-""",
+"""
+
+RESET_STATE_SQL = """
+DROP TABLE IF EXISTS markdown_projection_state CASCADE;
+DROP TABLE IF EXISTS write_operations CASCADE;
+DROP TABLE IF EXISTS semantic_documents CASCADE;
+DROP TABLE IF EXISTS memory_evidence CASCADE;
+DROP TABLE IF EXISTS checkin_events CASCADE;
+DROP TABLE IF EXISTS journal_entries CASCADE;
+DROP TABLE IF EXISTS tracks CASCADE;
+DROP TABLE IF EXISTS turn_events CASCADE;
+DROP TABLE IF EXISTS memory_cards CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+"""
+
+MIGRATIONS: tuple[Migration, ...] = (
+    (
+        "0001",
+        SCHEMA_SQL,
+    ),
+    (
+        "0002",
+        RESET_STATE_SQL + "\n" + SCHEMA_SQL,
     ),
 )
 

@@ -12,7 +12,14 @@ from mobius.state.checkin_engine import CheckinEngine
 from mobius.state.decision_engine import StateDecisionEngine
 from mobius.state.journal_engine import JournalEngine
 from mobius.state.memory_engine import MemoryEngine
-from mobius.state.models import StateContextSnapshot, StateDecision, WriteSummaryItem
+from mobius.state.models import (
+    CheckinWrite,
+    JournalWrite,
+    MemoryWrite,
+    StateContextSnapshot,
+    StateDecision,
+    WriteSummaryItem,
+)
 from mobius.state.projection_sync import ProjectionSync
 from mobius.state.storage import PostgresStore
 from mobius.state.store import StateStore
@@ -70,6 +77,120 @@ class StatePipeline:
     def context_for_prompt(self, *, user_key: str | None, routed_domain: str) -> str:
         if not self.enabled:
             return ""
+
+    @staticmethod
+    def _contains_evidence(*, user_text: str, evidence: str) -> bool:
+        user = re.sub(r"\s+", " ", user_text.strip()).lower()
+        quote = re.sub(r"\s+", " ", evidence.strip()).lower()
+        if not user or not quote:
+            return False
+        return quote in user
+
+    @staticmethod
+    def _looks_ambiguous_memory(text: str) -> bool:
+        normalized = text.strip().lower()
+        if not normalized:
+            return True
+        ambiguous_prefixes = (
+            "it ",
+            "this ",
+            "that ",
+            "these ",
+            "those ",
+            "they ",
+            "he ",
+            "she ",
+            "there ",
+            "here ",
+        )
+        return normalized.startswith(ambiguous_prefixes)
+
+    def _apply_grounding_guards(self, *, decision: StateDecision, user_text: str) -> StateDecision:
+        strict_grounding = bool(self.config.state.decision.strict_grounding)
+        facts_only = bool(self.config.state.decision.facts_only)
+        if not strict_grounding and not facts_only:
+            return decision
+
+        reason_parts: list[str] = []
+        checkin = decision.checkin
+        journal = decision.journal
+        memory = decision.memory
+
+        if checkin is not None:
+            evidence = checkin.evidence.strip()
+            if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
+                checkin = None
+                reason_parts.append("check-in-filtered-missing-evidence")
+            elif facts_only:
+                checkin = CheckinWrite(
+                    domain=checkin.domain,
+                    track_type=checkin.track_type,
+                    title=checkin.title,
+                    summary=evidence or checkin.summary,
+                    outcome=checkin.outcome,
+                    confidence=checkin.confidence,
+                    wins=[
+                        item
+                        for item in checkin.wins
+                        if self._contains_evidence(user_text=user_text, evidence=item)
+                    ],
+                    barriers=[
+                        item
+                        for item in checkin.barriers
+                        if self._contains_evidence(user_text=user_text, evidence=item)
+                    ],
+                    next_actions=[
+                        item
+                        for item in checkin.next_actions
+                        if self._contains_evidence(user_text=user_text, evidence=item)
+                    ],
+                    tags=[],
+                    evidence=evidence,
+                )
+
+        if journal is not None:
+            evidence = journal.evidence.strip()
+            if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
+                journal = None
+                reason_parts.append("journal-filtered-missing-evidence")
+            elif facts_only:
+                journal = JournalWrite(
+                    entry_ts=journal.entry_ts,
+                    title=journal.title,
+                    body_md=user_text.strip(),
+                    domain_hints=journal.domain_hints,
+                    evidence=evidence,
+                )
+
+        if memory is not None:
+            evidence = memory.evidence.strip()
+            if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
+                memory = None
+                reason_parts.append("memory-filtered-missing-evidence")
+            else:
+                memory_text = evidence or memory.memory
+                if self._looks_ambiguous_memory(memory_text):
+                    memory = None
+                    reason_parts.append("memory-filtered-ambiguous")
+                elif facts_only:
+                    memory = MemoryWrite(
+                        domain=memory.domain,
+                        memory=memory_text.strip(),
+                        evidence=evidence,
+                    )
+
+        reason = decision.reason.strip()
+        if reason_parts:
+            suffix = ",".join(reason_parts)
+            reason = f"{reason}|{suffix}" if reason else suffix
+        return StateDecision(
+            checkin=checkin,
+            journal=journal,
+            memory=memory,
+            reason=reason,
+            source_model=decision.source_model,
+            is_failure=decision.is_failure,
+        )
         try:
             normalized_user_key = self.resolve_user_key(user_key, self.config)
             snapshot = self.storage.fetch_context_snapshot(
@@ -112,6 +233,7 @@ class StatePipeline:
                 routed_domain=routed_domain,
                 context=snapshot,
             )
+            decision = self._apply_grounding_guards(decision=decision, user_text=user_text)
             if not decision.has_writes():
                 return self._decision_failure_footer(
                     decision=decision,

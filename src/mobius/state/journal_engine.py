@@ -50,13 +50,18 @@ class JournalEngine:
         user_text: str,
         assistant_text: str,
     ) -> WriteSummaryItem:
+        facts_only = bool(self.config.state.decision.facts_only)
+        journal_body = user_text.strip() if facts_only else payload.body_md
+        include_assistant_excerpt = (
+            self.config.state.journal.include_assistant_excerpt and not facts_only
+        )
         body = _format_journal_entry(
             entry_ts=payload.entry_ts,
             title=payload.title,
             user_text=user_text,
-            generated_body=payload.body_md,
+            generated_body=journal_body,
             assistant_excerpt=assistant_text[: self.config.state.journal.max_assistant_excerpt_chars]
-            if self.config.state.journal.include_assistant_excerpt
+            if include_assistant_excerpt
             else "",
         )
         normalized = JournalWrite(
