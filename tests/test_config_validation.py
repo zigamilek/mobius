@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+import yaml
 
 from mobius.config import AppConfig, load_config
 
@@ -172,3 +173,23 @@ def test_state_decision_on_failure_rejects_invalid_value() -> None:
     payload["state"] = {"decision": {"on_failure": "explode"}}
     with pytest.raises(ValidationError):
         AppConfig.model_validate(payload)
+
+
+def test_load_config_ignores_runtime_behavior_env_overrides(
+    tmp_path: Path, monkeypatch
+) -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {"enabled": False, "database": {"dsn": None}}
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    monkeypatch.setenv("MOBIUS_STATE_ENABLED", "true")
+    monkeypatch.setenv("MOBIUS_STATE_DECISION_FACTS_ONLY", "false")
+    monkeypatch.setenv("MOBIUS_STATE_DECISION_STRICT_GROUNDING", "false")
+    monkeypatch.setenv("MOBIUS_LOG_LEVEL", "TRACE")
+    loaded = load_config(cfg_path)
+
+    assert loaded.state.enabled is False
+    assert loaded.state.decision.facts_only is True
+    assert loaded.state.decision.strict_grounding is True
+    assert loaded.logging.level == "INFO"

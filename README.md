@@ -36,6 +36,7 @@ Use:
 
 - `.env` for local development secrets (copy from `.env.example`)
 - `/etc/mobius/mobius.env` for systemd deployments
+- Keep runtime behavior flags in `config.yaml` (YAML is the single source of truth).
 
 For local macOS testing, use `config.local.yaml` so data and logs stay under `./data`.
 
@@ -194,18 +195,11 @@ mobius logs --file --follow       # file logs from configured log path
 
 ### Local Debug Modes
 
-You can control debug verbosity and output using config or env overrides.
+Configure debug verbosity in YAML:
 
 - Levels: `ERROR`, `WARNING`, `INFO`, `DEBUG`, `TRACE`
 - Outputs: `console`, `file`, `both`
 - Daily file rotation: `logging.daily_rotation: true`
-
-Quick override examples (without editing YAML):
-
-```bash
-MOBIUS_LOG_LEVEL=DEBUG MOBIUS_LOG_OUTPUT=console mobius
-MOBIUS_LOG_LEVEL=TRACE MOBIUS_LOG_OUTPUT=both MOBIUS_LOG_DIR="$(pwd)/data/logs" mobius
-```
 
 Tail daily-rotating log file:
 

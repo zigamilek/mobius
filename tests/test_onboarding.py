@@ -59,8 +59,8 @@ def test_onboarding_keep_mode_continues_with_existing_values(
     assert "OPENAI_API_KEY=existing-openai" in env_text
     assert "GEMINI_API_KEY=existing-gemini" in env_text
     assert "MOBIUS_API_KEY=existing-mobius-key" in env_text
-    assert "MOBIUS_STATE_ENABLED=true" in env_text
     assert "MOBIUS_STATE_DSN=postgresql://user:pass@localhost:5432/mobius" in env_text
+    assert "MOBIUS_STATE_ENABLED=" not in env_text
 
 
 def test_onboarding_cancel_mode_stops_without_writing(

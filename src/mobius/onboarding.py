@@ -46,7 +46,6 @@ def _write_env_file(path: Path, values: dict[str, str]) -> None:
         f"OPENAI_API_KEY={values.get('OPENAI_API_KEY', '')}",
         f"GEMINI_API_KEY={values.get('GEMINI_API_KEY', '')}",
         f"MOBIUS_API_KEY={values.get('MOBIUS_API_KEY', '')}",
-        f"MOBIUS_STATE_ENABLED={values.get('MOBIUS_STATE_ENABLED', 'false')}",
         f"MOBIUS_STATE_DSN={values.get('MOBIUS_STATE_DSN', '')}",
         "",
     ]
@@ -256,7 +255,6 @@ def run_onboarding(
             "OPENAI_API_KEY": openai_key,
             "GEMINI_API_KEY": gemini_key,
             "MOBIUS_API_KEY": mobius_api_key,
-            "MOBIUS_STATE_ENABLED": "true" if state_enabled else "false",
             "MOBIUS_STATE_DSN": state_dsn if state_enabled else "",
         },
     )

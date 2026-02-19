@@ -119,7 +119,6 @@ if [[ ! -f "${CONFIG_DIR}/mobius.env" ]]; then
 OPENAI_API_KEY=
 GEMINI_API_KEY=
 MOBIUS_API_KEY=change-me
-MOBIUS_STATE_ENABLED=false
 MOBIUS_STATE_DSN=
 EOF
 fi

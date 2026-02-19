@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mobius"
-version = "0.6.1"
+version = "0.7.0"
 description = "OpenAI-compatible specialist router/orchestrator."
 readme = "README.md"
 requires-python = ">=3.11"

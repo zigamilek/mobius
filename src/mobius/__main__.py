@@ -421,7 +421,6 @@ def _cmd_db_bootstrap_local(args: argparse.Namespace) -> int:
         updated_env = _upsert_env_lines(
             env_lines,
             {
-                "MOBIUS_STATE_ENABLED": "true",
                 "MOBIUS_STATE_DSN": dsn,
             },
         )
