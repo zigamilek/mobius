@@ -207,7 +207,7 @@ class Orchestrator:
         return decision
 
     def _build_system_prompt(
-        self, selected: list[SpecialistProfile], state_context: str = ""
+        self, selected: list[SpecialistProfile], state_context: str | None = ""
     ) -> str:
         if not selected:
             prompt = self.prompt_manager.get("general")
@@ -218,11 +218,12 @@ class Orchestrator:
                 lines.append(self.prompt_manager.get(specialist.domain))
             prompt = "\n".join(lines)
 
-        if state_context.strip():
+        context_text = str(state_context or "").strip()
+        if context_text:
             prompt = (
                 f"{prompt}\n\n"
                 "User state context (deterministic snapshot):\n"
-                f"{state_context.strip()}"
+                f"{context_text}"
             )
 
         if not self.config.runtime.inject_current_timestamp:
@@ -283,7 +284,7 @@ class Orchestrator:
         self,
         request: ChatCompletionRequest,
         decision: RoutingDecision,
-        state_context: str = "",
+        state_context: str | None = "",
     ) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []
         system_prompt = self._build_system_prompt(decision.selected, state_context)

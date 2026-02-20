@@ -77,6 +77,20 @@ class StatePipeline:
     def context_for_prompt(self, *, user_key: str | None, routed_domain: str) -> str:
         if not self.enabled:
             return ""
+        try:
+            normalized_user_key = self.resolve_user_key(user_key, self.config)
+            snapshot = self.storage.fetch_context_snapshot(
+                user_key=normalized_user_key,
+                routed_domain=routed_domain,
+            )
+            return self._format_context(snapshot)
+        except Exception as exc:
+            self.logger.warning(
+                "State context load failed domain=%s error=%s",
+                routed_domain,
+                exc.__class__.__name__,
+            )
+            return ""
 
     @staticmethod
     def _contains_evidence(*, user_text: str, evidence: str) -> bool:
@@ -191,20 +205,6 @@ class StatePipeline:
             source_model=decision.source_model,
             is_failure=decision.is_failure,
         )
-        try:
-            normalized_user_key = self.resolve_user_key(user_key, self.config)
-            snapshot = self.storage.fetch_context_snapshot(
-                user_key=normalized_user_key,
-                routed_domain=routed_domain,
-            )
-            return self._format_context(snapshot)
-        except Exception as exc:
-            self.logger.warning(
-                "State context load failed domain=%s error=%s",
-                routed_domain,
-                exc.__class__.__name__,
-            )
-            return ""
 
     async def process_turn(
         self,

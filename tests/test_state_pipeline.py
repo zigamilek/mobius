@@ -140,6 +140,18 @@ def test_state_pipeline_can_silence_failure_footer() -> None:
     assert footer == ""
 
 
+def test_context_for_prompt_returns_string_when_enabled() -> None:
+    cfg = _config()
+    pipeline = StatePipeline(
+        config=cfg,
+        state_store=_FakeStateStore(),  # type: ignore[arg-type]
+        llm_router=_FakeLLMRouter(),  # type: ignore[arg-type]
+    )
+    pipeline.storage = _FakeStorage()  # type: ignore[assignment]
+    context = pipeline.context_for_prompt(user_key="alice", routed_domain="health")
+    assert isinstance(context, str)
+
+
 def test_grounding_guard_filters_memory_without_evidence_match() -> None:
     cfg = _config()
     pipeline = StatePipeline(

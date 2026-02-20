@@ -426,3 +426,13 @@ def test_state_context_and_footer_are_injected_when_pipeline_is_present() -> Non
     assert "Active tracks:" in system_prompt
     assert len(state_pipeline.context_calls) == 1
     assert len(state_pipeline.process_calls) == 1
+
+
+def test_build_system_prompt_tolerates_none_state_context() -> None:
+    orchestrator, _llm_router, _specialist_router = _build_orchestrator(
+        domain="general",
+        answer_text="ok",
+    )
+    prompt = orchestrator._build_system_prompt([], None)  # type: ignore[arg-type]
+    assert isinstance(prompt, str)
+    assert "general prompt" in prompt
