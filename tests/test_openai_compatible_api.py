@@ -92,6 +92,28 @@ def test_chat_completion_uses_forwarded_user_id_header_when_payload_user_missing
     assert stub.last_user == "ziga"
 
 
+def test_chat_completion_prefers_forwarded_user_name_header_over_user_id() -> None:
+    app = create_app()
+    stub = _StubOrchestrator()
+    app.state.services["orchestrator"] = stub
+    client = TestClient(app)
+    response = client.post(
+        "/v1/chat/completions",
+        headers={
+            "Authorization": "Bearer dev-local-key",
+            "X-OpenWebUI-User-Name": "ziga",
+            "X-OpenWebUI-User-Id": "6aedbd6f-3a09-4781-9980-2bb8114ba497",
+        },
+        json={
+            "model": "mobius",
+            "messages": [{"role": "user", "content": "test"}],
+            "stream": False,
+        },
+    )
+    assert response.status_code == 200
+    assert stub.last_user == "ziga"
+
+
 def test_chat_completion_prefers_payload_user_over_forwarded_header() -> None:
     app = create_app()
     stub = _StubOrchestrator()

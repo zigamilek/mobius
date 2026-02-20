@@ -10,6 +10,7 @@ from mobius.api.schemas import ChatCompletionRequest, ModelCard, ModelListRespon
 from mobius.logging_setup import get_logger
 
 logger = get_logger(__name__)
+FORWARDED_USER_NAME_HEADER = "X-OpenWebUI-User-Name"
 FORWARDED_USER_ID_HEADER = "X-OpenWebUI-User-Id"
 
 
@@ -35,13 +36,22 @@ def _payload_user_with_header_fallback(
     if payload_user:
         return payload
 
-    forwarded_user = str(request.headers.get(FORWARDED_USER_ID_HEADER, "") or "").strip()
+    header_candidates = (FORWARDED_USER_NAME_HEADER, FORWARDED_USER_ID_HEADER)
+    selected_header = ""
+    forwarded_user = ""
+    for header_name in header_candidates:
+        candidate = str(request.headers.get(header_name, "") or "").strip()
+        if not candidate:
+            continue
+        selected_header = header_name
+        forwarded_user = candidate
+        break
     if not forwarded_user:
         return payload
 
     logger.debug(
-        "Using forwarded user id header '%s' for request user.",
-        FORWARDED_USER_ID_HEADER,
+        "Using forwarded user header '%s' for request user.",
+        selected_header,
     )
     return payload.model_copy(update={"user": forwarded_user})
 
