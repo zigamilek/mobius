@@ -65,8 +65,8 @@ state:
   database:
     dsn: ${ENV:MOBIUS_STATE_DSN}
     auto_migrate: true
-    min_schema_version: "0002"
-    max_schema_version: "0002"
+    min_schema_version: "0003"
+    max_schema_version: "0003"
     connect_timeout_seconds: 5
   projection:
     mode: one_way
@@ -89,11 +89,6 @@ state:
     max_wins: 3
     max_barriers: 3
     max_next_actions: 3
-  journal:
-    enabled: true
-    include_assistant_excerpt: false
-    max_assistant_excerpt_chars: 320
-    max_domain_hints: 4
   memory:
     enabled: true
     max_tags: 8
@@ -109,7 +104,6 @@ state:
   retrieval:
     active_tracks_limit: 5
     recent_checkins_limit: 5
-    recent_journal_entries_limit: 3
     recent_memory_cards_limit: 5
 
 diagnostics:

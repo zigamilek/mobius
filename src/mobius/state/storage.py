@@ -11,7 +11,6 @@ from mobius.config import StateConfig
 from mobius.logging_setup import get_logger
 from mobius.state.models import (
     CheckinWrite,
-    JournalWrite,
     MemoryWrite,
     StateContextSnapshot,
     WriteSummaryItem,
@@ -218,18 +217,6 @@ LIMIT %s
 
                 cursor.execute(
                     """
-SELECT entry_date, entry_ts, title, LEFT(body_md, 320) AS excerpt
-FROM journal_entries
-WHERE user_id = %s
-ORDER BY entry_ts DESC
-LIMIT %s
-""",
-                    (user_id, self.config.retrieval.recent_journal_entries_limit),
-                )
-                recent_journals = cursor.fetchall()
-
-                cursor.execute(
-                    """
 SELECT domain, slug, memory, occurrences, last_seen
 FROM memory_cards
 WHERE user_id = %s
@@ -245,7 +232,6 @@ LIMIT %s
                 return StateContextSnapshot(
                     active_tracks=[dict(row) for row in active_tracks],
                     recent_checkins=[dict(row) for row in recent_checkins],
-                    recent_journal_entries=[dict(row) for row in recent_journals],
                     recent_memory_cards=[dict(row) for row in recent_memories],
                 )
 
@@ -507,92 +493,6 @@ WHERE id = %s
             except Exception as exc:
                 conn.rollback()
                 self.logger.warning("Failed to write check-in: %s", exc.__class__.__name__)
-                raise
-
-    def write_journal(
-        self,
-        *,
-        user_id: str,
-        turn_id: str,
-        payload: JournalWrite,
-        idempotency_key: str,
-        source_model: str | None,
-    ) -> WriteSummaryItem:
-        entry_date = payload.entry_ts.date().isoformat()
-        target = f"journal/{entry_date}.md"
-        payload_hash = _payload_hash(
-            {
-                "entry_ts": payload.entry_ts.isoformat(),
-                "title": payload.title,
-                "body_md": payload.body_md,
-                "domain_hints": payload.domain_hints,
-            }
-        )
-        with self._connect() as conn:
-            try:
-                with conn.cursor() as cursor:
-                    op_id, inserted = self._begin_write_operation(
-                        cursor,
-                        user_id=user_id,
-                        turn_id=turn_id,
-                        channel="journal",
-                        idempotency_key=idempotency_key,
-                        payload_hash=payload_hash,
-                    )
-                    if not inserted:
-                        conn.rollback()
-                        return WriteSummaryItem(
-                            channel="journal",
-                            status="skipped_duplicate",
-                            target=target,
-                            details="duplicate idempotency key",
-                        )
-
-                    cursor.execute(
-                        """
-INSERT INTO journal_entries(
-    user_id,
-    entry_date,
-    entry_ts,
-    title,
-    body_md,
-    domain_hints,
-    source_turn_id,
-    source_model
-)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-RETURNING id
-""",
-                        (
-                            user_id,
-                            payload.entry_ts.date(),
-                            payload.entry_ts,
-                            payload.title,
-                            payload.body_md,
-                            payload.domain_hints,
-                            turn_id,
-                            source_model,
-                        ),
-                    )
-                    inserted_row = cursor.fetchone()
-                    journal_id = str(inserted_row["id"])
-                    self._finish_write_operation(
-                        cursor,
-                        operation_id=op_id,
-                        status="applied",
-                        result_ref=journal_id,
-                    )
-                    conn.commit()
-                    return WriteSummaryItem(
-                        channel="journal",
-                        status="applied",
-                        target=target,
-                        details=payload.title,
-                        result_ref=journal_id,
-                    )
-            except Exception as exc:
-                conn.rollback()
-                self.logger.warning("Failed to write journal: %s", exc.__class__.__name__)
                 raise
 
     def write_memory(
@@ -891,22 +791,6 @@ WHERE user_id = %s AND track_id = %s
 ORDER BY timestamp DESC
 """,
                     (user_id, track_id),
-                )
-                rows = cursor.fetchall()
-                conn.rollback()
-                return [dict(row) for row in rows]
-
-    def list_journals(self, *, user_id: str) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-SELECT id, entry_date, entry_ts, title, body_md, domain_hints, created_at, updated_at
-FROM journal_entries
-WHERE user_id = %s
-ORDER BY entry_ts DESC
-""",
-                    (user_id,),
                 )
                 rows = cursor.fetchall()
                 conn.rollback()

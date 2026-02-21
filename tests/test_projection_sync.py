@@ -15,9 +15,6 @@ class _FakeStore:
     def list_checkins(self, *, user_id: str, track_id: str) -> list[dict[str, Any]]:
         return []
 
-    def list_journals(self, *, user_id: str) -> list[dict[str, Any]]:
-        return []
-
     def list_memories(self, *, user_id: str) -> list[dict[str, Any]]:
         now = datetime.now(timezone.utc)
         return [

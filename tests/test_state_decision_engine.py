@@ -88,7 +88,6 @@ def _config() -> AppConfig:
                 "enabled": False,
                 "decision": {"enabled": True},
                 "checkin": {"enabled": True},
-                "journal": {"enabled": True},
                 "memory": {"enabled": True},
             },
         }
@@ -110,13 +109,12 @@ def test_model_failure_returns_no_writes() -> None:
         )
     )
     assert decision.checkin is None
-    assert decision.journal is None
     assert decision.memory is None
     assert decision.reason == "state-model-unavailable"
     assert decision.is_failure is True
 
 
-def test_model_json_can_trigger_all_three_write_types() -> None:
+def test_model_json_can_trigger_checkin_and_memory_writes() -> None:
     cfg = _config()
     payload = {
         "checkin": {
@@ -132,14 +130,6 @@ def test_model_json_can_trigger_all_three_write_types() -> None:
             "tags": ["fat_loss"],
             "evidence": "Today I decided I'll finally lose fat.",
             "reason": "explicit ongoing goal with accountability intent",
-        },
-        "journal": {
-            "write": True,
-            "title": "Lose fat commitment",
-            "body_md": "Today I committed to a consistent fat-loss process.",
-            "domain_hints": ["health"],
-            "evidence": "Today I decided I'll finally lose fat.",
-            "reason": "daily event worth journaling",
         },
         "memory": {
             "write": True,
@@ -163,11 +153,9 @@ def test_model_json_can_trigger_all_three_write_types() -> None:
         )
     )
     assert decision.checkin is not None
-    assert decision.journal is not None
     assert decision.memory is not None
     assert decision.reason == "explicit_goal_signal"
     assert decision.checkin_reason == "explicit ongoing goal with accountability intent"
-    assert decision.journal_reason == "daily event worth journaling"
     assert decision.memory_reason == "durable long-term commitment"
 
 
@@ -188,13 +176,6 @@ def test_invalid_json_is_retried_and_second_attempt_succeeds() -> None:
             "tags": [],
             "evidence": "fat-loss progress",
             "reason": "ongoing progress update",
-        },
-        "journal": {
-            "write": False,
-            "title": "",
-            "body_md": "",
-            "domain_hints": [],
-            "reason": "not a day log",
         },
         "memory": {
             "write": False,
@@ -220,7 +201,6 @@ def test_invalid_json_is_retried_and_second_attempt_succeeds() -> None:
     )
     assert router.calls == 2
     assert decision.checkin is not None
-    assert decision.journal is None
     assert decision.memory is None
 
 
@@ -240,14 +220,6 @@ def _base_decision_payload() -> dict[str, Any]:
             "evidence": "",
             "reason": "no ongoing coaching signal",
         },
-        "journal": {
-            "write": False,
-            "title": "",
-            "body_md": "",
-            "domain_hints": [],
-            "evidence": "",
-            "reason": "no daily log signal",
-        },
         "memory": {
             "write": False,
             "domain": "",
@@ -263,22 +235,12 @@ def _base_decision_payload() -> dict[str, Any]:
     ("enabled_channels", "query"),
     [
         ({"memory"}, "I am lactose intolerant."),
-        ({"journal"}, "Today we visited the technical museum with the family."),
         (
             {"checkin"},
             "Fat-loss check-in: this week I trained 4 times and broke nutrition twice.",
         ),
-        ({"memory", "journal"}, "Today I decided I'll finally try to lose some fat."),
         (
             {"memory", "checkin"},
-            "For months I have been eating sweets late at night; please track this with me.",
-        ),
-        (
-            {"journal", "checkin"},
-            "Today's check-in: I stayed within calories but skipped training.",
-        ),
-        (
-            {"memory", "journal", "checkin"},
             "Today I decided to quit smoking for good; this is day 1 and I want coaching.",
         ),
     ],
@@ -303,15 +265,6 @@ def test_positive_write_combination_matrix(
             "evidence": query,
             "reason": "check-in signal present",
         }
-    if "journal" in enabled_channels:
-        payload["journal"] = {
-            "write": True,
-            "title": "Daily entry",
-            "body_md": query,
-            "domain_hints": ["health"],
-            "evidence": query,
-            "reason": "daily factual event",
-        }
     if "memory" in enabled_channels:
         payload["memory"] = {
             "write": True,
@@ -333,7 +286,6 @@ def test_positive_write_combination_matrix(
         )
     )
     assert (decision.checkin is not None) is ("checkin" in enabled_channels)
-    assert (decision.journal is not None) is ("journal" in enabled_channels)
     assert (decision.memory is not None) is ("memory" in enabled_channels)
 
 
@@ -354,11 +306,10 @@ def test_negative_matrix_generic_qna_can_return_no_writes() -> None:
         )
     )
     assert decision.checkin is None
-    assert decision.journal is None
     assert decision.memory is None
 
 
-def test_prompt_contains_positive_and_negative_matrix_examples() -> None:
+def test_prompt_contains_examples() -> None:
     text = StateDecisionEngine._system_prompt()
     assert "Canonical positive examples:" in text
     assert "Canonical negative examples:" in text

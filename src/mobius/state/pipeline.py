@@ -10,11 +10,9 @@ from mobius.logging_setup import get_logger
 from mobius.providers.litellm_router import LiteLLMRouter
 from mobius.state.checkin_engine import CheckinEngine
 from mobius.state.decision_engine import StateDecisionEngine
-from mobius.state.journal_engine import JournalEngine
 from mobius.state.memory_engine import MemoryEngine
 from mobius.state.models import (
     CheckinWrite,
-    JournalWrite,
     MemoryWrite,
     StateContextSnapshot,
     StateDecision,
@@ -48,11 +46,13 @@ class StatePipeline:
         self.llm_router = llm_router
         self.logger = get_logger(__name__)
         self.enabled = bool(config.state.enabled and state_store.status.ready)
+        # Temporary state pause:
+        # - check-in and memory remain in codebase but are intentionally paused
+        self._writes_temporarily_paused = True
 
         self.storage = PostgresStore(config.state)
         self.decision_engine = StateDecisionEngine(config=config, llm_router=llm_router)
         self.checkin_engine = CheckinEngine(store=self.storage)
-        self.journal_engine = JournalEngine(config=config, store=self.storage)
         self.memory_engine = MemoryEngine(
             config=config,
             store=self.storage,
@@ -75,7 +75,7 @@ class StatePipeline:
         return cls._fallback_user_key(config)
 
     def context_for_prompt(self, *, user_key: str | None, routed_domain: str) -> str:
-        if not self.enabled:
+        if not self.enabled or self._writes_temporarily_paused:
             return ""
         try:
             normalized_user_key = self.resolve_user_key(user_key, self.config)
@@ -135,13 +135,6 @@ class StatePipeline:
             else:
                 checkin_reason = "missing check-in reason from state decision model"
 
-        journal_reason = cls._clean_reason(decision.journal_reason)
-        if not journal_reason:
-            if failure_reason:
-                journal_reason = f"not written ({failure_reason})"
-            else:
-                journal_reason = "missing journal reason from state decision model"
-
         memory_reason = cls._clean_reason(decision.memory_reason)
         if not memory_reason:
             if failure_reason:
@@ -151,10 +144,8 @@ class StatePipeline:
 
         return StateDecision(
             checkin=decision.checkin,
-            journal=decision.journal,
             memory=decision.memory,
             checkin_reason=checkin_reason,
-            journal_reason=journal_reason,
             memory_reason=memory_reason,
             reason=top_reason,
             source_model=decision.source_model,
@@ -176,10 +167,6 @@ class StatePipeline:
                 f"- memory: {'true' if normalized.memory is not None else 'false'} "
                 f"({normalized.memory_reason})"
             ),
-            (
-                f"- journal: {'true' if normalized.journal is not None else 'false'} "
-                f"({normalized.journal_reason})"
-            ),
         ]
         return "\n".join(lines) + "\n\n"
 
@@ -191,10 +178,8 @@ class StatePipeline:
 
         reason_parts: list[str] = []
         checkin = decision.checkin
-        journal = decision.journal
         memory = decision.memory
         checkin_reason = self._clean_reason(decision.checkin_reason)
-        journal_reason = self._clean_reason(decision.journal_reason)
         memory_reason = self._clean_reason(decision.memory_reason)
 
         if checkin is not None:
@@ -230,21 +215,6 @@ class StatePipeline:
                     evidence=evidence,
                 )
 
-        if journal is not None:
-            evidence = journal.evidence.strip()
-            if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
-                journal = None
-                journal_reason = "filtered out: evidence not found in user text"
-                reason_parts.append("journal-filtered-missing-evidence")
-            elif facts_only:
-                journal = JournalWrite(
-                    entry_ts=journal.entry_ts,
-                    title=journal.title,
-                    body_md=user_text.strip(),
-                    domain_hints=journal.domain_hints,
-                    evidence=evidence,
-                )
-
         if memory is not None:
             evidence = memory.evidence.strip()
             if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
@@ -271,10 +241,8 @@ class StatePipeline:
         return self._decision_with_channel_reasons(
             StateDecision(
                 checkin=checkin,
-                journal=journal,
                 memory=memory,
                 checkin_reason=checkin_reason,
-                journal_reason=journal_reason,
                 memory_reason=memory_reason,
                 reason=reason,
                 source_model=decision.source_model,
@@ -309,7 +277,7 @@ class StatePipeline:
         routed_domain: str,
         user_text: str,
     ) -> StateDecision | None:
-        if not self.enabled:
+        if not self.enabled or self._writes_temporarily_paused:
             return None
         normalized_user_key = self.resolve_user_key(request_user, self.config)
         try:
@@ -329,7 +297,6 @@ class StatePipeline:
                 StateDecision(
                     reason=f"state-preview-failed:{exc.__class__.__name__}",
                     checkin_reason=f"state preview failed ({exc.__class__.__name__})",
-                    journal_reason=f"state preview failed ({exc.__class__.__name__})",
                     memory_reason=f"state preview failed ({exc.__class__.__name__})",
                     is_failure=True,
                 )
@@ -347,7 +314,7 @@ class StatePipeline:
         request_payload: dict[str, Any],
         precomputed_decision: StateDecision | None = None,
     ) -> str:
-        if not self.enabled:
+        if not self.enabled or self._writes_temporarily_paused:
             return ""
 
         normalized_user_key = self.resolve_user_key(request_user, self.config)
@@ -386,18 +353,6 @@ class StatePipeline:
                         payload=decision.checkin,
                         idempotency_key=f"{request_hash}:checkin",
                         source_model=decision.source_model or used_model,
-                    )
-                )
-            if decision.journal is not None:
-                summary_items.append(
-                    self.journal_engine.apply(
-                        user_id=user_id,
-                        turn_id=turn_id,
-                        payload=decision.journal,
-                        idempotency_key=f"{request_hash}:journal",
-                        source_model=decision.source_model or used_model,
-                        user_text=user_text,
-                        assistant_text=assistant_text,
                     )
                 )
             if decision.memory is not None:
@@ -443,10 +398,6 @@ class StatePipeline:
                 lines.append(
                     f"- {row.get('track_slug')}: {row.get('summary')} ({row.get('timestamp')})"
                 )
-        if snapshot.recent_journal_entries:
-            lines.append("Recent journal entries:")
-            for row in snapshot.recent_journal_entries:
-                lines.append(f"- {row.get('entry_date')}: {row.get('title')}")
         if snapshot.recent_memory_cards:
             lines.append("Recent memories:")
             for row in snapshot.recent_memory_cards:

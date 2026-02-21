@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -20,15 +19,6 @@ class CheckinWrite:
 
 
 @dataclass(frozen=True)
-class JournalWrite:
-    entry_ts: datetime
-    title: str
-    body_md: str
-    domain_hints: list[str] = field(default_factory=list)
-    evidence: str = ""
-
-
-@dataclass(frozen=True)
 class MemoryWrite:
     domain: str
     memory: str
@@ -38,17 +28,15 @@ class MemoryWrite:
 @dataclass(frozen=True)
 class StateDecision:
     checkin: CheckinWrite | None = None
-    journal: JournalWrite | None = None
     memory: MemoryWrite | None = None
     checkin_reason: str = ""
-    journal_reason: str = ""
     memory_reason: str = ""
     reason: str = ""
     source_model: str | None = None
     is_failure: bool = False
 
     def has_writes(self) -> bool:
-        return bool(self.checkin or self.journal or self.memory)
+        return bool(self.checkin or self.memory)
 
 
 @dataclass(frozen=True)
@@ -64,5 +52,4 @@ class WriteSummaryItem:
 class StateContextSnapshot:
     active_tracks: list[dict[str, object]] = field(default_factory=list)
     recent_checkins: list[dict[str, object]] = field(default_factory=list)
-    recent_journal_entries: list[dict[str, object]] = field(default_factory=list)
     recent_memory_cards: list[dict[str, object]] = field(default_factory=list)

@@ -10,7 +10,7 @@ Mobius is a custom router/orchestrator service that exposes an OpenAI-compatible
 - LLM-based specialist routing with one coherent final response
 - Image payload passthrough through `chat/completions`
 - Configurable specialist prompts loaded from markdown files
-- Optional stateful coaching pipeline (check-in, journal, memory) with automatic writes
+- Optional stateful coaching pipeline (check-in, memory) with automatic writes
 - One-way markdown projection from PostgreSQL state into human-readable files
 - Response footer summarizing state writes and projection targets
 - Restart-safe persistence and diagnostics endpoints
@@ -65,9 +65,6 @@ state:
     on_failure: footer_warning
   checkin:
     enabled: true
-  journal:
-    enabled: true
-    include_assistant_excerpt: false
   memory:
     enabled: true
     semantic_merge:
@@ -79,20 +76,19 @@ state:
 
 Phase 1 storage contract:
 
-- Source of truth: PostgreSQL (`users`, `turn_events`, `tracks`, `checkin_events`, `journal_entries`, `memory_cards`, `write_operations`, projection state, etc.)
+- Source of truth: PostgreSQL (`users`, `turn_events`, `tracks`, `checkin_events`, `memory_cards`, `write_operations`, projection state, etc.)
 - Projection: one-way markdown export under `state/users/<user_key>/...`
 - Retry safety: idempotency keys per request+channel
 - Decision engine: model-driven JSON contract with schema validation and retry
 - Memory dedupe: semantic merge using embeddings + verifier model decision
 - Failure visibility: if decision model fails, response footer can show state-warning
 
-Single prompt can trigger multiple writes (check-in + journal + memory) when justified.
+Single prompt can trigger multiple writes (check-in + memory) when justified.
 
 State write policy (facts-only):
 
 - `memory`: durable long-term facts/preferences/recurring patterns
 - `check-in`: ongoing goal/habit/system with progress/barrier/coaching signal
-- `journal`: factual daily life/event log
 - conservative default: when uncertain, do not write memory
 - strict grounding: write blocks must include an exact user-text evidence quote
 
@@ -189,7 +185,7 @@ mobius stop                       # systemd stop    (LXC/server)
 mobius restart                    # systemd restart (LXC/server)
 mobius update                     # run in-LXC updater (same flow as one-liner)
 mobius db bootstrap-local         # bootstrap local PostgreSQL + pgvector for state
-mobius logs --follow              # journal logs (default source)
+mobius logs --follow              # service logs (default source)
 mobius logs --file --follow       # file logs from configured log path
 ```
 

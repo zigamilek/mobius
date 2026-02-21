@@ -180,8 +180,8 @@ class RuntimeConfig(StrictConfigModel):
 class StateDatabaseConfig(StrictConfigModel):
     dsn: str | None = None
     auto_migrate: bool = True
-    min_schema_version: str = "0002"
-    max_schema_version: str = "0002"
+    min_schema_version: str = "0003"
+    max_schema_version: str = "0003"
     connect_timeout_seconds: int = 5
 
     @field_validator("dsn")
@@ -266,20 +266,6 @@ class StateCheckinConfig(StrictConfigModel):
         return value
 
 
-class StateJournalConfig(StrictConfigModel):
-    enabled: bool = True
-    include_assistant_excerpt: bool = False
-    max_assistant_excerpt_chars: int = 320
-    max_domain_hints: int = 4
-
-    @field_validator("max_assistant_excerpt_chars", "max_domain_hints")
-    @classmethod
-    def _positive_journal_limits(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("state.journal limits must be >= 1.")
-        return value
-
-
 class StateMemorySemanticMergeConfig(StrictConfigModel):
     enabled: bool = True
     embedding_model: str = "text-embedding-3-small"
@@ -332,13 +318,11 @@ class StateMemoryConfig(StrictConfigModel):
 class StateRetrievalConfig(StrictConfigModel):
     active_tracks_limit: int = 5
     recent_checkins_limit: int = 5
-    recent_journal_entries_limit: int = 3
     recent_memory_cards_limit: int = 5
 
     @field_validator(
         "active_tracks_limit",
         "recent_checkins_limit",
-        "recent_journal_entries_limit",
         "recent_memory_cards_limit",
     )
     @classmethod
@@ -355,7 +339,6 @@ class StateConfig(StrictConfigModel):
     user_scope: StateUserScopeConfig = Field(default_factory=StateUserScopeConfig)
     decision: StateDecisionConfig = Field(default_factory=StateDecisionConfig)
     checkin: StateCheckinConfig = Field(default_factory=StateCheckinConfig)
-    journal: StateJournalConfig = Field(default_factory=StateJournalConfig)
     memory: StateMemoryConfig = Field(default_factory=StateMemoryConfig)
     retrieval: StateRetrievalConfig = Field(default_factory=StateRetrievalConfig)
 

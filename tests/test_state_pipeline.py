@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any
 
 from mobius.config import AppConfig
 from mobius.state.models import (
     CheckinWrite,
-    JournalWrite,
     MemoryWrite,
     StateContextSnapshot,
     StateDecision,
@@ -82,7 +80,7 @@ def _config() -> AppConfig:
     )
 
 
-def test_state_pipeline_emits_footer_warning_when_decision_fails() -> None:
+def test_state_pipeline_returns_empty_footer_when_writes_are_paused() -> None:
     cfg = _config()
     cfg.state.decision.on_failure = "footer_warning"
     pipeline = StatePipeline(
@@ -107,9 +105,7 @@ def test_state_pipeline_emits_footer_warning_when_decision_fails() -> None:
             },
         )
     )
-    assert "*State warning:*" in footer
-    assert "state-model-unavailable" in footer
-    assert "state/users/alice/" in footer
+    assert footer == ""
 
 
 def test_state_pipeline_can_silence_failure_footer() -> None:
@@ -241,13 +237,6 @@ def test_grounding_guard_filters_all_channels_when_ungrounded() -> None:
             tags=[],
             evidence="This exact quote is missing",
         ),
-        journal=JournalWrite(
-            entry_ts=datetime.now(timezone.utc),
-            title="Day log",
-            body_md="I did work and training.",
-            domain_hints=["health"],
-            evidence="Another missing quote",
-        ),
         memory=MemoryWrite(
             domain="health",
             memory="I am lactose intolerant.",
@@ -260,28 +249,18 @@ def test_grounding_guard_filters_all_channels_when_ungrounded() -> None:
         user_text="Today I planted 3 raspberry bushes.",
     )
     assert guarded.checkin is None
-    assert guarded.journal is None
     assert guarded.memory is None
 
 
 def test_format_detection_header_renders_channel_booleans_and_reasons() -> None:
     decision = StateDecision(
         checkin=None,
-        journal=JournalWrite(
-            entry_ts=datetime.now(timezone.utc),
-            title="Day log",
-            body_md="Today we visited the museum.",
-            domain_hints=["general"],
-            evidence="Today we visited the museum.",
-        ),
         memory=None,
         checkin_reason="no ongoing coaching signal",
-        journal_reason="daily factual event",
         memory_reason="not durable preference",
-        reason="journal_only",
+        reason="memory_checkin_only",
     )
     header = StatePipeline.format_detection_header(decision)
     assert "*State detection:*" in header
     assert "- check-in: false (no ongoing coaching signal)" in header
     assert "- memory: false (not durable preference)" in header
-    assert "- journal: true (daily factual event)" in header

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
 from typing import Any
 
 from mobius.config import AppConfig
@@ -10,7 +9,6 @@ from mobius.logging_setup import get_logger
 from mobius.providers.litellm_router import LiteLLMRouter
 from mobius.state.models import (
     CheckinWrite,
-    JournalWrite,
     MemoryWrite,
     StateDecision,
     StateContextSnapshot,
@@ -63,20 +61,18 @@ def _extract_json_payload(text: str) -> dict[str, Any]:
 
 
 def _payload_has_required_shape(payload: dict[str, Any]) -> bool:
-    required_top_level = ("checkin", "journal", "memory", "reason")
+    required_top_level = ("checkin", "memory", "reason")
     for key in required_top_level:
         if key not in payload:
             return False
     if not isinstance(payload.get("checkin"), dict):
-        return False
-    if not isinstance(payload.get("journal"), dict):
         return False
     if not isinstance(payload.get("memory"), dict):
         return False
     reason = payload.get("reason")
     if not isinstance(reason, str):
         return False
-    for block_name in ("checkin", "journal", "memory"):
+    for block_name in ("checkin", "memory"):
         block = payload.get(block_name)
         if not isinstance(block, dict):
             return False
@@ -92,8 +88,6 @@ def _payload_has_required_shape(payload: dict[str, Any]) -> bool:
             continue
         if block_name == "checkin":
             required = ("domain", "track_type", "title", "summary", "outcome", "evidence")
-        elif block_name == "journal":
-            required = ("title", "body_md", "evidence")
         else:
             required = ("domain", "memory", "evidence")
         for key in required:
@@ -164,7 +158,6 @@ class StateDecisionEngine:
             return StateDecision(
                 reason="empty-user-text",
                 checkin_reason="empty user text",
-                journal_reason="empty user text",
                 memory_reason="empty user text",
             )
 
@@ -180,13 +173,11 @@ class StateDecisionEngine:
             return StateDecision(
                 reason="state-decision-disabled",
                 checkin_reason="state decision disabled",
-                journal_reason="state decision disabled",
                 memory_reason="state decision disabled",
             )
         return StateDecision(
             reason="state-model-unavailable",
             checkin_reason="state decision model unavailable",
-            journal_reason="state decision model unavailable",
             memory_reason="state decision model unavailable",
             is_failure=True,
         )
@@ -256,7 +247,7 @@ class StateDecisionEngine:
             if not _payload_has_required_shape(payload):
                 retry_feedback = (
                     "Previous JSON did not match required schema keys/types. "
-                    "Include top-level keys checkin, journal, memory, reason; "
+                    "Include top-level keys checkin, memory, reason; "
                     "and each channel must include boolean write."
                 )
                 continue
@@ -281,8 +272,7 @@ class StateDecisionEngine:
     def _system_prompt() -> str:
         return (
             "You are Mobius State Decision Engine.\n"
-            "Task: Decide whether to write check-in, daily journal entry, and/or memory "
-            "for the current user turn.\n"
+            "Task: Decide whether to write check-in and/or memory for the current user turn.\n"
             "You must be conservative, facts-only, and grounded in user text.\n"
             "Output requirements (MANDATORY):\n"
             "- Output EXACTLY one JSON object.\n"
@@ -304,14 +294,6 @@ class StateDecisionEngine:
             '    "evidence": string,\n'
             '    "reason": string\n'
             "  },\n"
-            '  "journal": {\n'
-            '    "write": boolean,\n'
-            '    "title": string,\n'
-            '    "body_md": string,\n'
-            '    "domain_hints": string[],\n'
-            '    "evidence": string,\n'
-            '    "reason": string\n'
-            "  },\n"
             '  "memory": {\n'
             '    "write": boolean,\n'
             '    "domain": string,\n'
@@ -322,7 +304,7 @@ class StateDecisionEngine:
             '  "reason": string\n'
             "}\n"
             "Policy:\n"
-            "- One message may trigger 0-3 writes.\n"
+            "- One message may trigger 0-2 writes.\n"
             "- Facts only: never invent details that are not in user text.\n"
             "- Never persist assistant advice as fact unless user explicitly confirms it.\n"
             "- For each write=true block, evidence must be an exact quote from user_text.\n"
@@ -334,20 +316,13 @@ class StateDecisionEngine:
             "Triage ladder:\n"
             "1) Memory: durable preferences, recurring patterns, long-term facts/commitments.\n"
             "2) Check-in: ongoing goal/habit/system plus progress/barrier/accountability/coaching signal.\n"
-            "3) Journal: factual day/event log or short day reflection.\n"
-            "Journal vs Check-in:\n"
-            "- If uncertain between journal and check-in, default to journal.\n"
-            "- One-off daily updates with no ongoing tracking intent are journal-only.\n"
             "Canonical positive examples:\n"
             "- 'I am lactose intolerant.' -> memory only.\n"
-            "- 'Today we visited the technical museum with the family.' -> journal only.\n"
             "- 'Fat-loss check-in: this week I trained 4 times ... keep me on the plan.' -> check-in only.\n"
-            "- 'Today I decided I'll finally try to lose some fat.' -> memory + journal.\n"
             "- 'For months I have been eating sweets late at night; track this weekly.' -> memory + check-in.\n"
-            "- 'Today's check-in: stayed within calories, skipped training.' -> journal + check-in.\n"
-            "- 'Today I decided to quit smoking for good; day 1, I want daily coaching.' -> all three.\n"
+            "- 'Today I decided to quit smoking for good; day 1, I want daily coaching.' -> memory + check-in.\n"
             "Canonical negative examples:\n"
-            "- 'Today I planted 3 raspberry bushes, 2 currant bushes, and a cherry tree.' -> journal only (not memory, not check-in).\n"
+            "- 'Today I planted 3 raspberry bushes, 2 currant bushes, and a cherry tree.' -> no state writes.\n"
             "- 'How should I prune currant bushes?' -> no state writes.\n"
             "- If channel is not justified, set write=false and use empty strings/lists.\n"
             "- Keep titles concise and stable.\n"
@@ -447,37 +422,6 @@ class StateDecisionEngine:
         if not checkin_reason:
             checkin_reason = "missing check-in reason from state decision model"
 
-        journal_block = payload.get("journal")
-        journal_write: JournalWrite | None = None
-        journal_reason = (
-            _compact_reason(journal_block.get("reason"))
-            if isinstance(journal_block, dict)
-            else ""
-        )
-        if self.config.state.journal.enabled and isinstance(journal_block, dict):
-            if bool(journal_block.get("write")):
-                title = str(journal_block.get("title") or "").strip()
-                if not title:
-                    title = _default_title_from_text(source_user_text)
-                body_md = str(journal_block.get("body_md") or "").strip()
-                if not body_md:
-                    body_md = source_user_text.strip()
-                evidence = str(journal_block.get("evidence") or "").strip()
-                journal_write = JournalWrite(
-                    entry_ts=datetime.now(timezone.utc),
-                    title=title,
-                    body_md=body_md,
-                    domain_hints=_normalize_items(
-                        journal_block.get("domain_hints"),
-                        limit=self.config.state.journal.max_domain_hints,
-                    ),
-                    evidence=evidence,
-                )
-        elif not self.config.state.journal.enabled:
-            journal_reason = "journal channel disabled by config"
-        if not journal_reason:
-            journal_reason = "missing journal reason from state decision model"
-
         memory_block = payload.get("memory")
         memory_write: MemoryWrite | None = None
         memory_reason = (
@@ -505,10 +449,8 @@ class StateDecisionEngine:
         reason = _compact_reason(payload.get("reason"))
         return StateDecision(
             checkin=checkin_write,
-            journal=journal_write,
             memory=memory_write,
             checkin_reason=checkin_reason,
-            journal_reason=journal_reason,
             memory_reason=memory_reason,
             reason=reason or "state-model",
             source_model=source_model,
@@ -530,10 +472,6 @@ class StateDecisionEngine:
                 lines.append(
                     f"- {row.get('track_slug')} @ {row.get('timestamp')}: {row.get('summary')}"
                 )
-        if context.recent_journal_entries:
-            lines.append("recent_journal_entries:")
-            for row in context.recent_journal_entries:
-                lines.append(f"- {row.get('entry_date')}: {row.get('title')}")
         if context.recent_memory_cards:
             lines.append("recent_memory_cards:")
             for row in context.recent_memory_cards:

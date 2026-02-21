@@ -20,6 +20,5 @@ Mobius uses persistent paths so the service survives restarts.
 - User root: `/var/lib/mobius/state/users/<user_key>/`
 - Tracks registry: `tracks.md`
 - Check-ins: `checkins/<track_slug>.md`
-- Journal: `journal/YYYY-MM-DD.md`
 - Memories: `memories/<domain>.md` (`memory`, `first_seen`, `last_seen`, `occurrences`)
 - Write operation log: `ops.log`

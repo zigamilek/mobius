@@ -463,9 +463,8 @@ def test_state_detection_header_is_prepended_before_answered_by() -> None:
     specialist_router = StubSpecialistRouter(domain="health")
     preview_decision = StateDecision(
         checkin_reason="no ongoing coaching request in user message",
-        journal_reason="daily factual event in user message",
         memory_reason="not a durable long-term fact",
-        reason="journal-only",
+        reason="memory-checkin-only",
     )
     state_pipeline = StubStatePipeline(
         context_text="",
@@ -473,7 +472,7 @@ def test_state_detection_header_is_prepended_before_answered_by() -> None:
             "*State detection:*\n"
             "- check-in: false (no ongoing coaching request in user message)\n"
             "- memory: false (not a durable long-term fact)\n"
-            "- journal: false (daily factual event in user message)\n\n"
+            "\n"
         ),
         footer_text="",
         preview_decision=preview_decision,
@@ -513,11 +512,11 @@ def test_orchestrator_strips_mobius_metadata_from_assistant_history() -> None:
                     "*State detection:*\n"
                     "- check-in: false (No check-in requested.)\n"
                     "- memory: false (Not a durable memory.)\n"
-                    "- journal: true (One-off daily log.)\n\n"
+                    "\n"
                     "*Answered by The Mentor (the general specialist) using gpt-5.2 model.*\n\n"
                     "Lepo - danes si posadil 4 maline.\n\n"
                     "*State writes:*\n"
-                    "- journal: `state/users/Ziga-Milek/journal/2026-02-20.md` (append)"
+                    "- memory: `state/users/Ziga-Milek/memories/general.md` (append)"
                 ),
             },
             {"role": "user", "content": "Kaj predlagas naprej?"},

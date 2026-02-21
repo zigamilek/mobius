@@ -56,20 +56,6 @@ CREATE TABLE IF NOT EXISTS checkin_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS journal_entries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    entry_date DATE NOT NULL,
-    entry_ts TIMESTAMPTZ NOT NULL,
-    title TEXT NULL,
-    body_md TEXT NOT NULL,
-    domain_hints TEXT[] NOT NULL DEFAULT '{}'::text[],
-    source_turn_id UUID NULL REFERENCES turn_events(id),
-    source_model TEXT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS memory_cards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
@@ -88,7 +74,7 @@ CREATE TABLE IF NOT EXISTS memory_cards (
 CREATE TABLE IF NOT EXISTS memory_evidence (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     memory_card_id UUID NOT NULL REFERENCES memory_cards(id) ON DELETE CASCADE,
-    evidence_type TEXT NOT NULL CHECK (evidence_type IN ('checkin_event', 'journal_entry', 'turn_event', 'manual_note')),
+    evidence_type TEXT NOT NULL CHECK (evidence_type IN ('checkin_event', 'turn_event', 'manual_note')),
     evidence_ref UUID NULL,
     excerpt TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -97,7 +83,7 @@ CREATE TABLE IF NOT EXISTS memory_evidence (
 CREATE TABLE IF NOT EXISTS semantic_documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
-    source_type TEXT NOT NULL CHECK (source_type IN ('memory_card', 'journal_entry')),
+    source_type TEXT NOT NULL CHECK (source_type IN ('memory_card')),
     source_id UUID NOT NULL,
     domain TEXT NULL,
     text_content TEXT NOT NULL,
@@ -111,7 +97,7 @@ CREATE TABLE IF NOT EXISTS write_operations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
     turn_id UUID NULL REFERENCES turn_events(id),
-    channel TEXT NOT NULL CHECK (channel IN ('checkin', 'journal', 'memory', 'projection')),
+    channel TEXT NOT NULL CHECK (channel IN ('checkin', 'memory', 'projection')),
     idempotency_key TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('applied', 'skipped_duplicate', 'failed')),
     payload_hash TEXT NOT NULL,
@@ -124,7 +110,7 @@ CREATE TABLE IF NOT EXISTS write_operations (
 CREATE TABLE IF NOT EXISTS markdown_projection_state (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
-    artifact_type TEXT NOT NULL CHECK (artifact_type IN ('tracks', 'checkin_file', 'journal_file', 'memory_file')),
+    artifact_type TEXT NOT NULL CHECK (artifact_type IN ('tracks', 'checkin_file', 'memory_file')),
     artifact_key TEXT NOT NULL,
     source_max_updated_at TIMESTAMPTZ NOT NULL,
     rendered_hash TEXT NOT NULL,
@@ -143,8 +129,6 @@ CREATE INDEX IF NOT EXISTS idx_checkin_events_track_ts_desc
     ON checkin_events(track_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_checkin_events_user_ts_desc
     ON checkin_events(user_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_journal_entries_user_date_ts_desc
-    ON journal_entries(user_id, entry_date DESC, entry_ts DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_cards_user_domain_last_seen_desc
     ON memory_cards(user_id, domain, last_seen DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_evidence_card_created_desc
@@ -161,7 +145,6 @@ DROP TABLE IF EXISTS write_operations CASCADE;
 DROP TABLE IF EXISTS semantic_documents CASCADE;
 DROP TABLE IF EXISTS memory_evidence CASCADE;
 DROP TABLE IF EXISTS checkin_events CASCADE;
-DROP TABLE IF EXISTS journal_entries CASCADE;
 DROP TABLE IF EXISTS tracks CASCADE;
 DROP TABLE IF EXISTS turn_events CASCADE;
 DROP TABLE IF EXISTS memory_cards CASCADE;
@@ -175,6 +158,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     ),
     (
         "0002",
+        RESET_STATE_SQL + "\n" + SCHEMA_SQL,
+    ),
+    (
+        "0003",
         RESET_STATE_SQL + "\n" + SCHEMA_SQL,
     ),
 )

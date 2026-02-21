@@ -241,7 +241,7 @@ def run_onboarding(
         prompts_default,
     )
     state_enabled = _prompt_confirm(
-        "Enable stateful pipeline (check-ins/journal/memory)?",
+        "Enable stateful pipeline (check-ins/memory)?",
         default=state_enabled_default,
     )
     state_dsn = _prompt_secret(

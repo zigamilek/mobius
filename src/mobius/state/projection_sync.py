@@ -49,11 +49,9 @@ class ProjectionSync:
     def export_user(self, *, user_id: str, user_key: str) -> list[WriteSummaryItem]:
         root = self.config.projection.output_directory / "users" / _safe_path_part(user_key)
         checkins_dir = root / "checkins"
-        journal_dir = root / "journal"
         memories_dir = root / "memories"
         root.mkdir(parents=True, exist_ok=True)
         checkins_dir.mkdir(parents=True, exist_ok=True)
-        journal_dir.mkdir(parents=True, exist_ok=True)
         memories_dir.mkdir(parents=True, exist_ok=True)
 
         tracks = self.store.list_tracks(user_id=user_id)
@@ -64,7 +62,6 @@ class ProjectionSync:
                 user_id=user_id,
                 track_id=track_id,
             )
-        journals = self.store.list_journals(user_id=user_id)
         memories = self.store.list_memories(user_id=user_id)
         operations = self.store.list_write_operations(user_id=user_id, limit=500)
 
@@ -75,7 +72,6 @@ class ProjectionSync:
             tracks=tracks,
             checkins_by_track=checkins_by_track,
         )
-        self._render_journal(journal_dir=journal_dir, user_id=user_id, journals=journals)
         self._render_memories(
             memories_dir=memories_dir,
             user_id=user_id,
@@ -234,54 +230,6 @@ class ProjectionSync:
                     "timestamp",
                     "created_at",
                 ),
-                rendered_hash=_content_hash(content),
-                path=str(file_path),
-            )
-
-    def _render_journal(
-        self,
-        *,
-        journal_dir: Path,
-        user_id: str,
-        journals: list[dict[str, Any]],
-    ) -> None:
-        by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for row in journals:
-            by_date[str(row.get("entry_date"))].append(row)
-
-        for entry_date, rows in by_date.items():
-            sorted_rows = sorted(
-                rows,
-                key=lambda row: row.get("entry_ts") or datetime.now(timezone.utc),
-            )
-            lines = [
-                "---",
-                "schema_version: 1",
-                "generated_by: mobius",
-                f"entry_date: {entry_date}",
-                f"updated_at: {datetime.now(timezone.utc).isoformat()}",
-                "---",
-                "",
-                f"# Journal - {entry_date}",
-                "",
-            ]
-            for row in sorted_rows:
-                lines.extend(
-                    [
-                        f"<!-- journal:{row.get('id')} -->",
-                        str(row.get("body_md") or "").strip(),
-                        f"<!-- /journal:{row.get('id')} -->",
-                        "",
-                    ]
-                )
-            content = "\n".join(lines).rstrip() + "\n"
-            file_path = journal_dir / f"{entry_date}.md"
-            file_path.write_text(content, encoding="utf-8")
-            self.store.upsert_projection_state(
-                user_id=user_id,
-                artifact_type="journal_file",
-                artifact_key=entry_date,
-                source_max_updated_at=_max_updated(sorted_rows, "updated_at", "entry_ts"),
                 rendered_hash=_content_hash(content),
                 path=str(file_path),
             )

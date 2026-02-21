@@ -107,12 +107,6 @@ def diagnostics_payload(
                     "max_barriers": config.state.checkin.max_barriers,
                     "max_next_actions": config.state.checkin.max_next_actions,
                 },
-                "journal": {
-                    "enabled": config.state.journal.enabled,
-                    "include_assistant_excerpt": config.state.journal.include_assistant_excerpt,
-                    "max_assistant_excerpt_chars": config.state.journal.max_assistant_excerpt_chars,
-                    "max_domain_hints": config.state.journal.max_domain_hints,
-                },
                 "memory": {
                     "enabled": config.state.memory.enabled,
                     "max_tags": config.state.memory.max_tags,
@@ -130,7 +124,6 @@ def diagnostics_payload(
                 "retrieval": {
                     "active_tracks_limit": config.state.retrieval.active_tracks_limit,
                     "recent_checkins_limit": config.state.retrieval.recent_checkins_limit,
-                    "recent_journal_entries_limit": config.state.retrieval.recent_journal_entries_limit,
                     "recent_memory_cards_limit": config.state.retrieval.recent_memory_cards_limit,
                 },
                 "runtime": state_runtime,
