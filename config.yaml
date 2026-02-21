@@ -60,52 +60,6 @@ runtime:
   timezone: Europe/Ljubljana
   include_timestamp_in_routing: false
 
-state:
-  enabled: false
-  database:
-    dsn: ${ENV:MOBIUS_STATE_DSN}
-    auto_migrate: true
-    min_schema_version: "0003"
-    max_schema_version: "0003"
-    connect_timeout_seconds: 5
-  projection:
-    mode: one_way
-    output_directory: /var/lib/mobius/state
-  user_scope:
-    policy: by_user
-    anonymous_user_key: anonymous
-  decision:
-    enabled: true
-    model: ""
-    include_fallbacks: false
-    facts_only: true
-    strict_grounding: true
-    max_user_chars: 3000
-    max_assistant_chars: 3000
-    max_json_retries: 1
-    on_failure: footer_warning
-  checkin:
-    enabled: true
-    max_wins: 3
-    max_barriers: 3
-    max_next_actions: 3
-  memory:
-    enabled: true
-    max_tags: 8
-    semantic_merge:
-      enabled: true
-      embedding_model: text-embedding-3-small
-      verification_model: ""
-      include_fallbacks: false
-      candidate_limit: 8
-      max_candidate_text_chars: 280
-      max_json_retries: 1
-      max_distance: 0.42
-  retrieval:
-    active_tracks_limit: 5
-    recent_checkins_limit: 5
-    recent_memory_cards_limit: 5
-
 diagnostics:
   enabled: true
   endpoints:

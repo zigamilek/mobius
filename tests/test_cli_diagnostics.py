@@ -39,12 +39,6 @@ def _write_config(path: Path) -> None:
                 },
             },
         },
-        "state": {
-            "enabled": True,
-            "database": {
-                "dsn": "${ENV:MOBIUS_STATE_DSN}",
-            },
-        },
     }
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
@@ -63,10 +57,10 @@ def test_diagnostics_loads_env_file_for_config_validation(
     cfg_path = tmp_path / "config.yaml"
     env_path = tmp_path / "mobius.env"
     _write_config(cfg_path)
-    env_path.write_text("MOBIUS_STATE_DSN=postgresql://u:p@127.0.0.1:5432/mobius\n")
+    env_path.write_text("OPENAI_API_KEY=test-key\n")
 
     monkeypatch.setenv("MOBIUS_DISABLE_DOTENV", "1")
-    monkeypatch.delenv("MOBIUS_STATE_DSN", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(cli, "_detect_local_ip", lambda: "192.168.111.33")
 
     rc = cli._cmd_diagnostics(

@@ -7,7 +7,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from mobius.specialist_catalog import SPECIALIST_DOMAINS, normalize_domain
 
@@ -18,7 +18,6 @@ except Exception:  # pragma: no cover - optional at runtime
 
 
 ENV_REF_PATTERN = re.compile(r"^\$\{ENV:([A-Z0-9_]+)\}$")
-SCHEMA_VERSION_PATTERN = re.compile(r"^\d{4}$")
 
 
 class StrictConfigModel(BaseModel):
@@ -177,184 +176,6 @@ class RuntimeConfig(StrictConfigModel):
         return timezone_name
 
 
-class StateDatabaseConfig(StrictConfigModel):
-    dsn: str | None = None
-    auto_migrate: bool = True
-    min_schema_version: str = "0003"
-    max_schema_version: str = "0003"
-    connect_timeout_seconds: int = 5
-
-    @field_validator("dsn")
-    @classmethod
-    def _dsn_non_empty_if_set(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        trimmed = value.strip()
-        return trimmed or None
-
-    @field_validator("min_schema_version", "max_schema_version")
-    @classmethod
-    def _schema_version_format(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not SCHEMA_VERSION_PATTERN.match(trimmed):
-            raise ValueError("Schema versions must match 'NNNN' format (example: 0001).")
-        return trimmed
-
-    @field_validator("connect_timeout_seconds")
-    @classmethod
-    def _positive_timeout(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("connect_timeout_seconds must be >= 1.")
-        return value
-
-
-class StateProjectionConfig(StrictConfigModel):
-    mode: Literal["one_way", "hybrid_bidirectional"] = "one_way"
-    output_directory: Path = Path("./data/state")
-
-
-class StateUserScopeConfig(StrictConfigModel):
-    policy: Literal["by_user", "fallback_anonymous"] = "by_user"
-    anonymous_user_key: str = "anonymous"
-
-    @field_validator("anonymous_user_key")
-    @classmethod
-    def _non_empty_anonymous_user_key(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            raise ValueError("state.user_scope.anonymous_user_key must not be empty.")
-        return trimmed
-
-
-class StateDecisionConfig(StrictConfigModel):
-    enabled: bool = True
-    model: str = ""
-    include_fallbacks: bool = False
-    facts_only: bool = True
-    strict_grounding: bool = True
-    max_user_chars: int = 3000
-    max_assistant_chars: int = 3000
-    max_json_retries: int = 1
-    on_failure: Literal["silent", "footer_warning"] = "footer_warning"
-
-    @field_validator("max_user_chars", "max_assistant_chars")
-    @classmethod
-    def _positive_max_chars(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("State decision max char limits must be >= 1.")
-        return value
-
-    @field_validator("max_json_retries")
-    @classmethod
-    def _non_negative_json_retries(cls, value: int) -> int:
-        if value < 0:
-            raise ValueError("state.decision.max_json_retries must be >= 0.")
-        return value
-
-
-class StateCheckinConfig(StrictConfigModel):
-    enabled: bool = True
-    max_wins: int = 3
-    max_barriers: int = 3
-    max_next_actions: int = 3
-
-    @field_validator("max_wins", "max_barriers", "max_next_actions")
-    @classmethod
-    def _positive_limits(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("state.checkin limits must be >= 1.")
-        return value
-
-
-class StateMemorySemanticMergeConfig(StrictConfigModel):
-    enabled: bool = True
-    embedding_model: str = "text-embedding-3-small"
-    verification_model: str = ""
-    include_fallbacks: bool = False
-    candidate_limit: int = 8
-    max_candidate_text_chars: int = 280
-    max_json_retries: int = 1
-    max_distance: float = 0.42
-
-    @field_validator("candidate_limit", "max_candidate_text_chars")
-    @classmethod
-    def _positive_semantic_limits(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("state.memory.semantic_merge limits must be >= 1.")
-        return value
-
-    @field_validator("max_json_retries")
-    @classmethod
-    def _non_negative_semantic_json_retries(cls, value: int) -> int:
-        if value < 0:
-            raise ValueError(
-                "state.memory.semantic_merge.max_json_retries must be >= 0."
-            )
-        return value
-
-    @field_validator("max_distance")
-    @classmethod
-    def _valid_max_distance(cls, value: float) -> float:
-        if value < 0.0:
-            raise ValueError("state.memory.semantic_merge.max_distance must be >= 0.")
-        return value
-
-
-class StateMemoryConfig(StrictConfigModel):
-    enabled: bool = True
-    max_tags: int = 8
-    semantic_merge: StateMemorySemanticMergeConfig = Field(
-        default_factory=StateMemorySemanticMergeConfig
-    )
-
-    @field_validator("max_tags")
-    @classmethod
-    def _positive_max_tags(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("state.memory.max_tags must be >= 1.")
-        return value
-
-
-class StateRetrievalConfig(StrictConfigModel):
-    active_tracks_limit: int = 5
-    recent_checkins_limit: int = 5
-    recent_memory_cards_limit: int = 5
-
-    @field_validator(
-        "active_tracks_limit",
-        "recent_checkins_limit",
-        "recent_memory_cards_limit",
-    )
-    @classmethod
-    def _positive_retrieval_limits(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("state.retrieval limits must be >= 1.")
-        return value
-
-
-class StateConfig(StrictConfigModel):
-    enabled: bool = False
-    database: StateDatabaseConfig = Field(default_factory=StateDatabaseConfig)
-    projection: StateProjectionConfig = Field(default_factory=StateProjectionConfig)
-    user_scope: StateUserScopeConfig = Field(default_factory=StateUserScopeConfig)
-    decision: StateDecisionConfig = Field(default_factory=StateDecisionConfig)
-    checkin: StateCheckinConfig = Field(default_factory=StateCheckinConfig)
-    memory: StateMemoryConfig = Field(default_factory=StateMemoryConfig)
-    retrieval: StateRetrievalConfig = Field(default_factory=StateRetrievalConfig)
-
-    @model_validator(mode="after")
-    def _validate_enabled_dsn(self) -> "StateConfig":
-        if not self.enabled:
-            return self
-        if not self.database.dsn:
-            raise ValueError("state.database.dsn must be set when state.enabled is true.")
-        if self.database.min_schema_version > self.database.max_schema_version:
-            raise ValueError(
-                "state.database.min_schema_version must be <= max_schema_version."
-            )
-        return self
-
-
 class AppConfig(StrictConfigModel):
     server: ServerConfig = Field(...)
     providers: ProvidersConfig = Field(...)
@@ -362,7 +183,6 @@ class AppConfig(StrictConfigModel):
     api: ApiConfig = Field(...)
     specialists: SpecialistsConfig = Field(...)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
-    state: StateConfig = Field(default_factory=StateConfig)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
@@ -415,4 +235,7 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     raw: dict[str, Any] = loaded
 
     expanded = _expand_env_refs(raw)
+    if isinstance(expanded, dict):
+        expanded = dict(expanded)
+        expanded.pop("state", None)
     return AppConfig.model_validate(expanded)

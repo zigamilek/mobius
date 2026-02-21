@@ -3,15 +3,12 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import secrets
 import shlex
 import socket
 import subprocess
 from pathlib import Path
-from urllib.parse import quote
 
 import uvicorn
-import yaml
 
 from mobius import __version__
 from mobius.config import AppConfig, load_config
@@ -21,16 +18,12 @@ SERVICE_NAME = "mobius"
 DEFAULT_REPO_URL = "https://github.com/zigamilek/mobius.git"
 DEFAULT_RAW_REPO_PATH = "zigamilek/mobius"
 DEFAULT_REPO_REF = "master"
-PGDG_KEY_URL = "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
-PGDG_KEYRING_PATH = Path("/usr/share/keyrings/postgresql.gpg")
-PGDG_SOURCES_LIST_PATH = Path("/etc/apt/sources.list.d/pgdg.list")
 GITHUB_HTTPS_RE = re.compile(
     r"^https://github\.com/(?P<path>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
 )
 GITHUB_SSH_RE = re.compile(
     r"^git@github\.com:(?P<path>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?$"
 )
-SAFE_DB_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 ENV_LINE_RE = re.compile(r"^(?P<key>[A-Z0-9_]+)=(?P<value>.*)$")
 
 
@@ -115,366 +108,6 @@ def _run_command(command: list[str]) -> int:
     except FileNotFoundError:
         print(f"Command not found: {command[0]}")
         return 127
-
-
-def _run_capture(command: list[str]) -> tuple[int, str, str]:
-    try:
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError:
-        return 127, "", f"Command not found: {command[0]}"
-    return completed.returncode, completed.stdout.strip(), completed.stderr.strip()
-
-
-def _run_or_fail(command: list[str], *, label: str, env: dict[str, str] | None = None) -> None:
-    print(f"-> {label}: {shlex.join(command)}")
-    try:
-        completed = subprocess.run(command, env=env, check=False)
-    except FileNotFoundError as exc:
-        raise RuntimeError(f"{label} failed: missing command ({exc}).") from exc
-    if completed.returncode != 0:
-        raise RuntimeError(f"{label} failed with exit code {completed.returncode}.")
-
-
-def _is_safe_db_identifier(value: str) -> bool:
-    return bool(SAFE_DB_IDENTIFIER_RE.match(value.strip()))
-
-
-def _sql_quote_literal(value: str) -> str:
-    return value.replace("'", "''")
-
-
-def _sql_quote_ident(value: str) -> str:
-    return '"' + value.replace('"', '""') + '"'
-
-
-def _psql_as_postgres(sql: str, *, db: str | None = None) -> tuple[int, str, str]:
-    command = ["runuser", "-u", "postgres", "--", "psql", "-v", "ON_ERROR_STOP=1"]
-    if db:
-        command.extend(["-d", db])
-    command.extend(["-tAc", sql])
-    return _run_capture(command)
-
-
-def _state_dsn(*, db_user: str, db_password: str, db_host: str, db_port: int, db_name: str) -> str:
-    quoted_password = quote(db_password, safe="")
-    return (
-        f"postgresql://{db_user}:{quoted_password}@{db_host}:{db_port}/{db_name}"
-    )
-
-
-def _linux_codename() -> str | None:
-    os_release = Path("/etc/os-release")
-    if not os_release.exists():
-        return None
-    try:
-        lines = os_release.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return None
-    values: dict[str, str] = {}
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip('"').strip("'")
-    codename = values.get("VERSION_CODENAME") or values.get("UBUNTU_CODENAME")
-    if not codename:
-        return None
-    cleaned = codename.strip().lower()
-    return cleaned or None
-
-
-def _install_first_available_package(packages: list[str]) -> tuple[bool, str | None]:
-    for package in packages:
-        show_rc, _stdout, _stderr = _run_capture(["apt-cache", "show", package])
-        if show_rc != 0:
-            continue
-        _run_or_fail(
-            ["apt-get", "install", "-y", package],
-            label=f"package install ({package})",
-        )
-        return True, package
-    return False, None
-
-
-def _ensure_pgdg_repo(codename: str) -> None:
-    _run_or_fail(
-        ["apt-get", "install", "-y", "ca-certificates", "curl", "gnupg"],
-        label="pgdg repository prerequisites",
-    )
-    _run_or_fail(
-        [
-            "bash",
-            "-lc",
-            f"rm -f {shlex.quote(str(PGDG_KEYRING_PATH))} && "
-            f"curl -fsSL {shlex.quote(PGDG_KEY_URL)} | gpg --dearmor > {shlex.quote(str(PGDG_KEYRING_PATH))}",
-        ],
-        label="pgdg repository key import",
-    )
-    PGDG_KEYRING_PATH.chmod(0o644)
-    repo_line = (
-        f"deb [signed-by={PGDG_KEYRING_PATH}] "
-        f"https://apt.postgresql.org/pub/repos/apt {codename}-pgdg main\n"
-    )
-    PGDG_SOURCES_LIST_PATH.write_text(repo_line, encoding="utf-8")
-    _run_or_fail(["apt-get", "update"], label="apt index refresh (pgdg)")
-
-
-def _load_env_lines(path: Path) -> list[str]:
-    if not path.exists():
-        return []
-    return path.read_text(encoding="utf-8").splitlines()
-
-
-def _upsert_env_lines(lines: list[str], updates: dict[str, str]) -> list[str]:
-    remaining = list(updates.keys())
-    result: list[str] = []
-    for line in lines:
-        match = ENV_LINE_RE.match(line.strip())
-        if not match:
-            result.append(line)
-            continue
-        key = match.group("key")
-        if key not in updates:
-            result.append(line)
-            continue
-        result.append(f"{key}={updates[key]}")
-        if key in remaining:
-            remaining.remove(key)
-    for key in remaining:
-        result.append(f"{key}={updates[key]}")
-    return result
-
-
-def _write_env_lines(path: Path, lines: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(lines).rstrip() + "\n"
-    path.write_text(text, encoding="utf-8")
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
-
-
-def _enable_state_in_config(path: Path) -> None:
-    loaded: object = {}
-    if path.exists():
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    data: dict[str, object] = loaded if isinstance(loaded, dict) else {}
-    state = data.setdefault("state", {})
-    if not isinstance(state, dict):
-        state = {}
-        data["state"] = state
-    state["enabled"] = True
-    database = state.setdefault("database", {})
-    if not isinstance(database, dict):
-        database = {}
-        state["database"] = database
-    database["dsn"] = "${ENV:MOBIUS_STATE_DSN}"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=False),
-        encoding="utf-8",
-    )
-
-
-def _service_exists(service_name: str) -> bool:
-    rc, _stdout, _stderr = _run_capture(
-        ["systemctl", "status", service_name, "--no-pager", "-l"]
-    )
-    return rc in {0, 3}
-
-
-def _cmd_db_bootstrap_local(args: argparse.Namespace) -> int:
-    if hasattr(os, "geteuid") and os.geteuid() != 0:
-        print("mobius db bootstrap-local should be run as root (or with sudo).")
-        return 1
-
-    db_name = str(getattr(args, "db_name", "mobius") or "mobius").strip()
-    db_user = str(getattr(args, "db_user", "mobius") or "mobius").strip()
-    db_host = str(getattr(args, "db_host", "127.0.0.1") or "127.0.0.1").strip()
-    db_port = int(getattr(args, "db_port", 5432) or 5432)
-    db_password = str(getattr(args, "db_password", "") or "").strip()
-    skip_install = bool(getattr(args, "skip_install", False))
-    no_restart = bool(getattr(args, "no_restart", False))
-    dry_run = bool(getattr(args, "dry_run", False))
-    assume_yes = bool(getattr(args, "yes", False))
-
-    if not _is_safe_db_identifier(db_name):
-        print(
-            "Invalid --db-name. Use letters/digits/underscore and start with letter/underscore."
-        )
-        return 2
-    if not _is_safe_db_identifier(db_user):
-        print(
-            "Invalid --db-user. Use letters/digits/underscore and start with letter/underscore."
-        )
-        return 2
-    if db_port < 1 or db_port > 65535:
-        print("Invalid --db-port. Expected 1..65535.")
-        return 2
-    if not db_password:
-        db_password = f"mobius-{secrets.token_urlsafe(18)}"
-
-    cfg_path = _resolve_config_path(getattr(args, "config_path", None))
-    env_path = _resolve_env_path(getattr(args, "env_file", None))
-    dsn = _state_dsn(
-        db_user=db_user,
-        db_password=db_password,
-        db_host=db_host,
-        db_port=db_port,
-        db_name=db_name,
-    )
-
-    print("")
-    print("Mobius Local DB Bootstrap")
-    print("=========================")
-    print(f"Config file:     {cfg_path}")
-    print(f"Env file:        {env_path}")
-    print(f"DB name:         {db_name}")
-    print(f"DB user:         {db_user}")
-    print(f"DB host:         {db_host}")
-    print(f"DB port:         {db_port}")
-    print(f"Install packages:{'no' if skip_install else 'yes'}")
-    print(f"Restart service: {'no' if no_restart else 'yes'}")
-    print("")
-
-    if dry_run:
-        print("Dry run only. No database/bootstrap changes were applied.")
-        return 0
-
-    if not assume_yes:
-        confirm = input("Proceed with local PostgreSQL bootstrap? [Y/n]: ").strip().lower()
-        if confirm in {"n", "no"}:
-            print("Bootstrap cancelled.")
-            return 0
-
-    try:
-        if not skip_install:
-            _run_or_fail(["apt-get", "update"], label="apt index refresh")
-            _run_or_fail(
-                ["apt-get", "install", "-y", "postgresql", "postgresql-contrib"],
-                label="postgresql package install",
-            )
-
-        _run_or_fail(
-            ["systemctl", "enable", "-q", "--now", "postgresql"],
-            label="postgresql service enable/start",
-        )
-
-        rc, version_text, _stderr = _run_capture(["psql", "--version"])
-        if rc != 0:
-            raise RuntimeError("Could not detect PostgreSQL version via psql.")
-        match = re.search(r"(\d+)(?:\.\d+)?", version_text)
-        major = match.group(1) if match else ""
-        pgvector_candidates = []
-        if major:
-            pgvector_candidates.append(f"postgresql-{major}-pgvector")
-        pgvector_candidates.append("postgresql-pgvector")
-        pgvector_installed, installed_pkg = _install_first_available_package(
-            pgvector_candidates
-        )
-        if not pgvector_installed:
-            codename = _linux_codename()
-            if codename:
-                print(
-                    "No pgvector package found in default repositories; "
-                    f"trying PostgreSQL APT repository ({codename}-pgdg)."
-                )
-                _ensure_pgdg_repo(codename)
-                pgvector_installed, installed_pkg = _install_first_available_package(
-                    pgvector_candidates
-                )
-        if not pgvector_installed:
-            raise RuntimeError(
-                "Could not install a pgvector package for this system. "
-                "Install pgvector manually, then rerun 'mobius db bootstrap-local'."
-            )
-        if installed_pkg:
-            print(f"Installed pgvector package: {installed_pkg}")
-
-        quoted_user_ident = _sql_quote_ident(db_user)
-        quoted_name_ident = _sql_quote_ident(db_name)
-        quoted_user_literal = _sql_quote_literal(db_user)
-        quoted_name_literal = _sql_quote_literal(db_name)
-        quoted_password = _sql_quote_literal(db_password)
-
-        role_exists_sql = (
-            f"SELECT 1 FROM pg_roles WHERE rolname = '{quoted_user_literal}' LIMIT 1;"
-        )
-        role_rc, role_exists, role_err = _psql_as_postgres(role_exists_sql)
-        if role_rc != 0:
-            raise RuntimeError(f"Failed to query PostgreSQL roles: {role_err}")
-        if role_exists.strip() != "1":
-            create_role_sql = (
-                f"CREATE ROLE {quoted_user_ident} LOGIN PASSWORD '{quoted_password}';"
-            )
-            create_role_rc, _out, create_role_err = _psql_as_postgres(create_role_sql)
-            if create_role_rc != 0:
-                raise RuntimeError(f"Failed to create DB role: {create_role_err}")
-        else:
-            alter_role_sql = (
-                f"ALTER ROLE {quoted_user_ident} WITH LOGIN PASSWORD '{quoted_password}';"
-            )
-            alter_role_rc, _out, alter_role_err = _psql_as_postgres(alter_role_sql)
-            if alter_role_rc != 0:
-                raise RuntimeError(f"Failed to alter DB role password: {alter_role_err}")
-
-        db_exists_sql = (
-            f"SELECT 1 FROM pg_database WHERE datname = '{quoted_name_literal}' LIMIT 1;"
-        )
-        db_rc, db_exists, db_err = _psql_as_postgres(db_exists_sql)
-        if db_rc != 0:
-            raise RuntimeError(f"Failed to query PostgreSQL databases: {db_err}")
-        if db_exists.strip() != "1":
-            create_db_sql = f"CREATE DATABASE {quoted_name_ident} OWNER {quoted_user_ident};"
-            create_db_rc, _out, create_db_err = _psql_as_postgres(create_db_sql)
-            if create_db_rc != 0:
-                raise RuntimeError(f"Failed to create database: {create_db_err}")
-
-        for extension_sql in (
-            "CREATE EXTENSION IF NOT EXISTS pgcrypto;",
-            "CREATE EXTENSION IF NOT EXISTS vector;",
-        ):
-            ext_rc, _out, ext_err = _psql_as_postgres(extension_sql, db=db_name)
-            if ext_rc != 0:
-                raise RuntimeError(
-                    f"Failed to ensure extension in '{db_name}': {ext_err}"
-                )
-
-        env_lines = _load_env_lines(env_path)
-        updated_env = _upsert_env_lines(
-            env_lines,
-            {
-                "MOBIUS_STATE_DSN": dsn,
-            },
-        )
-        _write_env_lines(env_path, updated_env)
-        _enable_state_in_config(cfg_path)
-
-        if not no_restart and _service_exists(SERVICE_NAME):
-            _run_or_fail(
-                ["systemctl", "restart", SERVICE_NAME],
-                label=f"{SERVICE_NAME} restart",
-            )
-
-    except Exception as exc:
-        print(f"Bootstrap failed: {exc}")
-        return 1
-
-    print("")
-    print("Local PostgreSQL bootstrap complete.")
-    print(f"- MOBIUS_STATE_DSN written to: {env_path}")
-    print(f"- state.enabled ensured in:    {cfg_path}")
-    if not no_restart and _service_exists(SERVICE_NAME):
-        print(f"- Service restarted:           {SERVICE_NAME}")
-    print("")
-    return 0
 
 
 def _raw_repo_path_from_origin_url(origin_url: str | None) -> str | None:
@@ -592,12 +225,10 @@ def _print_runtime_paths(
         prompts_dir = config.specialists.prompts_directory
         log_dir = config.logging.directory
         log_file = config.logging.directory / config.logging.filename
-        state_dir = config.state.projection.output_directory
     else:
         prompts_dir = Path("/etc/mobius/system_prompts")
         log_dir = Path("/var/log/mobius")
         log_file = log_dir / "mobius.log"
-        state_dir = Path("/var/lib/mobius/state")
 
     print("")
     print("Mobius Paths")
@@ -607,7 +238,6 @@ def _print_runtime_paths(
     print(f"System prompts dir: {prompts_dir} ({_path_state(prompts_dir)})")
     print(f"Logs directory:     {log_dir} ({_path_state(log_dir)})")
     print(f"Log file:           {log_file} ({_path_state(log_file)})")
-    print(f"State directory:    {state_dir} ({_path_state(state_dir)})")
     if config_error:
         print("")
         print(f"Config load note: {config_error}")
@@ -797,39 +427,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Print resolved update command without running it",
     )
 
-    db_parser = subparsers.add_parser("db", help="Database utilities")
-    db_subparsers = db_parser.add_subparsers(dest="db_command")
-    db_bootstrap_parser = db_subparsers.add_parser(
-        "bootstrap-local",
-        help="Bootstrap local PostgreSQL + pgvector and enable state mode",
-    )
-    db_bootstrap_parser.add_argument("--config", dest="config_path", default=None)
-    db_bootstrap_parser.add_argument("--env-file", dest="env_file", default=None)
-    db_bootstrap_parser.add_argument("--db-name", default="mobius")
-    db_bootstrap_parser.add_argument("--db-user", default="mobius")
-    db_bootstrap_parser.add_argument("--db-password", default=None)
-    db_bootstrap_parser.add_argument("--db-host", default="127.0.0.1")
-    db_bootstrap_parser.add_argument("--db-port", type=int, default=5432)
-    db_bootstrap_parser.add_argument(
-        "--skip-install",
-        action="store_true",
-        help="Skip apt installation steps for PostgreSQL packages",
-    )
-    db_bootstrap_parser.add_argument(
-        "--no-restart",
-        action="store_true",
-        help="Do not restart mobius service after bootstrap",
-    )
-    db_bootstrap_parser.add_argument(
-        "--yes",
-        action="store_true",
-        help="Run non-interactively without confirmation prompt",
-    )
-    db_bootstrap_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print plan only, no changes applied",
-    )
     return parser
 
 
@@ -863,12 +460,6 @@ def main() -> None:
         raise SystemExit(_cmd_logs(args))
     if command == "update":
         raise SystemExit(_cmd_update(args))
-    if command == "db":
-        db_command = getattr(args, "db_command", None)
-        if db_command == "bootstrap-local":
-            raise SystemExit(_cmd_db_bootstrap_local(args))
-        print("Usage: mobius db bootstrap-local [options]")
-        raise SystemExit(2)
 
     # When no subcommand is passed, argparse does not populate serve-only fields
     # like host/port. Fall back to config values in that case.

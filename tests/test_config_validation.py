@@ -98,84 +98,7 @@ def test_api_attribution_template_rejects_empty_string() -> None:
         AppConfig.model_validate(payload)
 
 
-def test_state_enabled_requires_database_dsn() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {"enabled": True, "database": {"dsn": None}}
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_schema_version_rejects_invalid_format() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {
-        "database": {
-            "min_schema_version": "1",
-            "max_schema_version": "0001",
-        }
-    }
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_schema_version_rejects_inverted_range() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {
-        "enabled": True,
-        "database": {
-            "dsn": "postgresql://user:pass@localhost:5432/mobius",
-            "min_schema_version": "0002",
-            "max_schema_version": "0001",
-        },
-    }
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_user_scope_rejects_empty_anonymous_user_key() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {
-        "user_scope": {"policy": "fallback_anonymous", "anonymous_user_key": "   "}
-    }
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_retrieval_limits_reject_zero() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {"retrieval": {"recent_memory_cards_limit": 0}}
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_checkin_limits_reject_zero() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {"checkin": {"max_wins": 0}}
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_decision_json_retries_reject_negative() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {"decision": {"max_json_retries": -1}}
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_memory_semantic_merge_limits_reject_zero() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {"memory": {"semantic_merge": {"candidate_limit": 0}}}
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_state_decision_on_failure_rejects_invalid_value() -> None:
-    payload = deepcopy(_valid_config())
-    payload["state"] = {"decision": {"on_failure": "explode"}}
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate(payload)
-
-
-def test_load_config_ignores_runtime_behavior_env_overrides(
+def test_load_config_ignores_removed_state_section_and_env_overrides(
     tmp_path: Path, monkeypatch
 ) -> None:
     payload = deepcopy(_valid_config())
@@ -189,7 +112,5 @@ def test_load_config_ignores_runtime_behavior_env_overrides(
     monkeypatch.setenv("MOBIUS_LOG_LEVEL", "TRACE")
     loaded = load_config(cfg_path)
 
-    assert loaded.state.enabled is False
-    assert loaded.state.decision.facts_only is True
-    assert loaded.state.decision.strict_grounding is True
+    assert not hasattr(loaded, "state")
     assert loaded.logging.level == "INFO"

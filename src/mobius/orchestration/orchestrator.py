@@ -18,7 +18,6 @@ from mobius.orchestration.specialists import SpecialistProfile, get_specialist
 from mobius.prompts.manager import PromptManager
 from mobius.providers.litellm_router import LiteLLMRouter
 from mobius.runtime_context import timestamp_context_line
-from mobius.state.pipeline import StatePipeline
 
 
 @dataclass
@@ -133,14 +132,12 @@ class Orchestrator:
         specialist_router: SpecialistRouter,
         prompt_manager: PromptManager,
         session_store: StickySessionStore | None = None,
-        state_pipeline: StatePipeline | None = None,
     ) -> None:
         self.config = config
         self.llm_router = llm_router
         self.specialist_router = specialist_router
         self.prompt_manager = prompt_manager
         self.session_store = session_store or StickySessionStore(history_size=3)
-        self.state_pipeline = state_pipeline
         self.logger = get_logger(__name__)
         self.public_model_id = self.config.api.public_model_id
         self.allow_provider_model_passthrough = (
@@ -276,9 +273,7 @@ class Orchestrator:
         )
         return decision
 
-    def _build_system_prompt(
-        self, selected: list[SpecialistProfile], state_context: str | None = ""
-    ) -> str:
+    def _build_system_prompt(self, selected: list[SpecialistProfile]) -> str:
         if not selected:
             prompt = self.prompt_manager.get("general")
         else:
@@ -287,14 +282,6 @@ class Orchestrator:
                 lines.append(f"- {specialist.label} ({specialist.domain}):")
                 lines.append(self.prompt_manager.get(specialist.domain))
             prompt = "\n".join(lines)
-
-        context_text = str(state_context or "").strip()
-        if context_text:
-            prompt = (
-                f"{prompt}\n\n"
-                "User state context (deterministic snapshot):\n"
-                f"{context_text}"
-            )
 
         if not self.config.runtime.inject_current_timestamp:
             return prompt
@@ -354,10 +341,9 @@ class Orchestrator:
         self,
         request: ChatCompletionRequest,
         decision: RoutingDecision,
-        state_context: str | None = "",
     ) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []
-        system_prompt = self._build_system_prompt(decision.selected, state_context)
+        system_prompt = self._build_system_prompt(decision.selected)
         messages.append({"role": "system", "content": system_prompt})
         for message in request.messages:
             serialized = _message_to_dict(message)
@@ -390,25 +376,7 @@ class Orchestrator:
         if session_key and self._is_first_user_prompt(request.messages):
             self.session_store.reset(session_key)
         decision = await self._decide_routing(request.messages, request.model, session_key)
-        state_context = ""
-        state_decision = None
-        state_detection_header = ""
-        if self.state_pipeline is not None:
-            state_context = self.state_pipeline.context_for_prompt(
-                user_key=request.user,
-                routed_domain=decision.domain,
-            )
-            state_decision = await self.state_pipeline.preview_turn(
-                request_user=request.user,
-                routed_domain=decision.domain,
-                user_text=user_text,
-            )
-            state_detection_header = self.state_pipeline.format_detection_header(state_decision)
-        messages = self._build_orchestrated_messages(
-            request,
-            decision,
-            state_context=state_context,
-        )
+        messages = self._build_orchestrated_messages(request, decision)
 
         passthrough = request.model_dump(
             exclude={"messages", "model", "stream"},
@@ -423,24 +391,7 @@ class Orchestrator:
         response = _chunk_to_dict(raw_response)
         response["model"] = decision.response_model
         assistant_text = self._extract_assistant_text(response)
-        augmented = (
-            state_detection_header
-            + self._answered_by_prefix(decision.domain, used_model)
-            + assistant_text
-        )
-        if self.state_pipeline is not None:
-            footer = await self.state_pipeline.process_turn(
-                request_user=request.user,
-                session_key=session_key,
-                routed_domain=decision.domain,
-                user_text=user_text,
-                assistant_text=assistant_text,
-                used_model=used_model,
-                request_payload=request.model_dump(exclude_none=True),
-                precomputed_decision=state_decision,
-            )
-            if footer:
-                augmented = f"{augmented}\n\n{footer}"
+        augmented = self._answered_by_prefix(decision.domain, used_model) + assistant_text
         try:
             response["choices"][0]["message"]["content"] = augmented
         except Exception:
@@ -470,25 +421,7 @@ class Orchestrator:
         if session_key and self._is_first_user_prompt(request.messages):
             self.session_store.reset(session_key)
         decision = await self._decide_routing(request.messages, request.model, session_key)
-        state_context = ""
-        state_decision = None
-        state_detection_header = ""
-        if self.state_pipeline is not None:
-            state_context = self.state_pipeline.context_for_prompt(
-                user_key=request.user,
-                routed_domain=decision.domain,
-            )
-            state_decision = await self.state_pipeline.preview_turn(
-                request_user=request.user,
-                routed_domain=decision.domain,
-                user_text=user_text,
-            )
-            state_detection_header = self.state_pipeline.format_detection_header(state_decision)
-        messages = self._build_orchestrated_messages(
-            request,
-            decision,
-            state_context=state_context,
-        )
+        messages = self._build_orchestrated_messages(request, decision)
         passthrough = request.model_dump(
             exclude={"messages", "model", "stream"},
             exclude_none=True,
@@ -504,7 +437,7 @@ class Orchestrator:
 
         stream_id: str | None = None
         chunk_count = 0
-        prefix = state_detection_header + self._answered_by_prefix(decision.domain, used_model)
+        prefix = self._answered_by_prefix(decision.domain, used_model)
         prefix_pending = bool(prefix)
         collected_assistant_chunks: list[str] = []
         async for chunk in stream:
@@ -544,34 +477,6 @@ class Orchestrator:
                 prefix_pending = False
             as_dict["model"] = decision.response_model
             yield f"data: {json.dumps(as_dict)}\n\n".encode("utf-8")
-
-        assistant_text = "".join(collected_assistant_chunks).strip()
-        if self.state_pipeline is not None:
-            footer = await self.state_pipeline.process_turn(
-                request_user=request.user,
-                session_key=session_key,
-                routed_domain=decision.domain,
-                user_text=user_text,
-                assistant_text=assistant_text,
-                used_model=used_model,
-                request_payload=request.model_dump(exclude_none=True),
-                precomputed_decision=state_decision,
-            )
-            if footer:
-                footer_chunk = {
-                    "id": stream_id or f"chatcmpl-{uuid4().hex}",
-                    "object": "chat.completion.chunk",
-                    "created": int(datetime.now(timezone.utc).timestamp()),
-                    "model": decision.response_model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {"content": f"\n\n{footer}"},
-                            "finish_reason": None,
-                        }
-                    ],
-                }
-                yield f"data: {json.dumps(footer_chunk)}\n\n".encode("utf-8")
 
         yield b"data: [DONE]\n\n"
         self.logger.info(

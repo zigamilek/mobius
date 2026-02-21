@@ -10,9 +10,6 @@ Mobius is a custom router/orchestrator service that exposes an OpenAI-compatible
 - LLM-based specialist routing with one coherent final response
 - Image payload passthrough through `chat/completions`
 - Configurable specialist prompts loaded from markdown files
-- Optional stateful coaching pipeline (check-in, memory) with automatic writes
-- One-way markdown projection from PostgreSQL state into human-readable files
-- Response footer summarizing state writes and projection targets
 - Restart-safe persistence and diagnostics endpoints
 
 ## Configuration
@@ -39,58 +36,6 @@ Use:
 - Keep runtime behavior flags in `config.yaml` (YAML is the single source of truth).
 
 For local macOS testing, use `config.local.yaml` so data and logs stay under `./data`.
-
-### Stateful Pipeline (Phase 1)
-
-Stateful features are disabled by default and can be enabled with:
-
-```yaml
-state:
-  enabled: true
-  database:
-    dsn: ${ENV:MOBIUS_STATE_DSN}
-  projection:
-    mode: one_way
-    output_directory: /var/lib/mobius/state
-  user_scope:
-    policy: by_user
-    anonymous_user_key: anonymous
-  decision:
-    enabled: true
-    model: ""                # empty => fallback to models.orchestrator
-    include_fallbacks: false
-    facts_only: true         # persist only user-grounded facts
-    strict_grounding: true   # require exact user evidence for writes
-    max_json_retries: 1      # auto-retry when output is invalid JSON/schema
-    on_failure: footer_warning
-  checkin:
-    enabled: true
-  memory:
-    enabled: true
-    semantic_merge:
-      enabled: true
-      embedding_model: text-embedding-3-small
-      verification_model: "" # empty => fallback to models.orchestrator
-      max_json_retries: 1
-```
-
-Phase 1 storage contract:
-
-- Source of truth: PostgreSQL (`users`, `turn_events`, `tracks`, `checkin_events`, `memory_cards`, `write_operations`, projection state, etc.)
-- Projection: one-way markdown export under `state/users/<user_key>/...`
-- Retry safety: idempotency keys per request+channel
-- Decision engine: model-driven JSON contract with schema validation and retry
-- Memory dedupe: semantic merge using embeddings + verifier model decision
-- Failure visibility: if decision model fails, response footer can show state-warning
-
-Single prompt can trigger multiple writes (check-in + memory) when justified.
-
-State write policy (facts-only):
-
-- `memory`: durable long-term facts/preferences/recurring patterns
-- `check-in`: ongoing goal/habit/system with progress/barrier/coaching signal
-- conservative default: when uncertain, do not write memory
-- strict grounding: write blocks must include an exact user-text evidence quote
 
 ### Specialist Routing Model
 
@@ -184,7 +129,6 @@ mobius start                      # systemd start   (LXC/server)
 mobius stop                       # systemd stop    (LXC/server)
 mobius restart                    # systemd restart (LXC/server)
 mobius update                     # run in-LXC updater (same flow as one-liner)
-mobius db bootstrap-local         # bootstrap local PostgreSQL + pgvector for state
 mobius logs --follow              # service logs (default source)
 mobius logs --file --follow       # file logs from configured log path
 ```
@@ -213,8 +157,7 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 python -m pytest -q \
   tests/test_specialist_router.py \
-  tests/test_orchestrator_routing_behavior.py \
-  tests/test_state_decision_engine.py
+  tests/test_orchestrator_routing_behavior.py
 ```
 
 To print each routing test query and selected specialist:
@@ -278,16 +221,6 @@ Run on the Proxmox host:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/mobius.sh)"
 ```
 
-By default, fresh installs now attempt local DB bootstrap (PostgreSQL + pgvector)
-and enable `state.enabled=true` automatically when bootstrap succeeds.
-
-To skip this behavior:
-
-```bash
-MOBIUS_BOOTSTRAP_LOCAL_DB=no \
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/mobius.sh)"
-```
-
 Optional overrides (same style as community-scripts):
 
 ```bash
@@ -310,26 +243,10 @@ Run inside the container (recommended):
 mobius update
 ```
 
-If you want update-time DB bootstrap as well, run:
-
-```bash
-MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=yes mobius update
-```
-
-Note: even when `MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=no`, the updater now
-auto-runs local DB bootstrap if your config has `state.enabled: true` but
-`MOBIUS_STATE_DSN` is missing, so the service does not restart into a crash loop.
-
 Equivalent one-liner:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/mobius.sh)"
-```
-
-Retrofit local DB bootstrap in an existing LXC:
-
-```bash
-sudo mobius db bootstrap-local
 ```
 
 When executed inside LXC, this runs the script update flow and refreshes:

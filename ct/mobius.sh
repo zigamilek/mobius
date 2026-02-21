@@ -60,7 +60,6 @@ function update_script() {
   local SERVICE_USER="mobius"
   local REPO_URL="${REPO_URL:-$MOBIUS_REPO_URL}"
   local REPO_REF="${REPO_REF:-$MOBIUS_REPO_REF}"
-  local BOOTSTRAP_ON_UPDATE="${MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE:-no}"
   local GIT_SAFE_ARGS=(-c "safe.directory=${APP_DIR}")
 
   detect_service_port() {
@@ -117,44 +116,6 @@ function update_script() {
     return 1
   }
 
-  config_requires_state_dsn_bootstrap() {
-    local config_file="${CONFIG_DIR}/config.yaml"
-    local env_file="${CONFIG_DIR}/mobius.env"
-
-    "${APP_DIR}/.venv/bin/python" - "${config_file}" "${env_file}" <<'PY'
-import os
-import sys
-from pathlib import Path
-
-config_path = Path(sys.argv[1])
-env_path = Path(sys.argv[2])
-
-if env_path.exists():
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ[key.strip()] = value.strip()
-
-try:
-    from mobius.config import load_config
-except Exception:
-    raise SystemExit(1)
-
-try:
-    load_config(config_path)
-except Exception as exc:
-    if "state.database.dsn must be set when state.enabled is true." in str(exc):
-        raise SystemExit(10)
-    raise SystemExit(1)
-
-raise SystemExit(0)
-PY
-    local rc=$?
-    [[ "${rc}" -eq 10 ]]
-  }
-
   msg_info "Stopping ${SERVICE_NAME} service"
   $STD systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
   msg_ok "Stopped ${SERVICE_NAME} service"
@@ -202,14 +163,13 @@ PY
   msg_ok "CLI command available: mobius"
 
   msg_info "Refreshing runtime files"
-  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius /var/lib/mobius/state
+  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius
   [[ -f "${CONFIG_DIR}/config.yaml" ]] || $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
   if [[ ! -f "${CONFIG_DIR}/mobius.env" ]]; then
     cat <<'EOF' > "${CONFIG_DIR}/mobius.env"
 OPENAI_API_KEY=
 GEMINI_API_KEY=
 MOBIUS_API_KEY=change-me
-MOBIUS_STATE_DSN=
 EOF
   fi
   $STD chmod 600 "${CONFIG_DIR}/mobius.env"
@@ -218,35 +178,8 @@ EOF
     [[ -f "${CONFIG_DIR}/system_prompts/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/system_prompts/${prompt_name}"
   done
   $STD cp "${APP_DIR}/deploy/systemd/mobius.service" "/etc/systemd/system/${SERVICE_NAME}.service"
-  $STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius /var/lib/mobius/state
+  $STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius
   msg_ok "Runtime files refreshed"
-
-  case "$(echo "${BOOTSTRAP_ON_UPDATE}" | tr '[:upper:]' '[:lower:]')" in
-    1|true|yes|on)
-      msg_info "Bootstrapping local PostgreSQL during update"
-      if $STD /usr/local/bin/mobius db bootstrap-local --yes --no-restart; then
-        msg_ok "Local PostgreSQL bootstrap completed"
-      else
-        msg_warn "Local PostgreSQL bootstrap failed during update"
-        msg_warn "Run 'mobius db bootstrap-local' manually to retry"
-      fi
-      ;;
-    *)
-      msg_info "Skipping DB bootstrap on update (MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=${BOOTSTRAP_ON_UPDATE})"
-      ;;
-  esac
-
-  if config_requires_state_dsn_bootstrap; then
-    msg_warn "Detected state.enabled=true without MOBIUS_STATE_DSN after update prep"
-    msg_warn "Running local PostgreSQL bootstrap automatically to keep service healthy"
-    if $STD /usr/local/bin/mobius db bootstrap-local --yes --no-restart; then
-      msg_ok "Local PostgreSQL bootstrap completed"
-    else
-      msg_error "Automatic DB bootstrap failed while state requires a DSN."
-      msg_error "Run 'mobius db bootstrap-local --yes' and retry update."
-      return 1
-    fi
-  fi
 
   msg_info "Restarting ${SERVICE_NAME}"
   $STD systemctl daemon-reload

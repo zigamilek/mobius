@@ -46,7 +46,6 @@ def _write_env_file(path: Path, values: dict[str, str]) -> None:
         f"OPENAI_API_KEY={values.get('OPENAI_API_KEY', '')}",
         f"GEMINI_API_KEY={values.get('GEMINI_API_KEY', '')}",
         f"MOBIUS_API_KEY={values.get('MOBIUS_API_KEY', '')}",
-        f"MOBIUS_STATE_DSN={values.get('MOBIUS_STATE_DSN', '')}",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -66,17 +65,6 @@ def _prompt_secret(prompt: str, current: str = "") -> str:
     hint = " [set]" if current else ""
     value = getpass.getpass(f"{prompt}{hint}: ").strip()
     return value if value else current
-
-
-def _prompt_confirm(prompt: str, default: bool = False) -> bool:
-    suffix = " [Y/n]" if default else " [y/N]"
-    try:
-        raw = input(f"{prompt}{suffix}: ").strip().lower()
-    except EOFError:
-        return default
-    if not raw:
-        return default
-    return raw in {"y", "yes"}
 
 
 def _prompt_existing_data_mode() -> str:
@@ -120,9 +108,6 @@ def _existing_setup_signals(
         signals.append("OPENAI_API_KEY is already configured in env file.")
     if _is_meaningful_secret(env_values.get("GEMINI_API_KEY")):
         signals.append("GEMINI_API_KEY is already configured in env file.")
-    if _is_meaningful_secret(env_values.get("MOBIUS_STATE_DSN")):
-        signals.append("MOBIUS_STATE_DSN is already configured in env file.")
-
     server = _as_dict(raw_cfg.get("server"))
     api_keys = server.get("api_keys")
     if isinstance(api_keys, list) and any(str(item or "").strip() for item in api_keys):
@@ -208,12 +193,6 @@ def run_onboarding(
         if config is not None
         else str(raw_specialists.get("prompts_directory", "./system_prompts"))
     )
-    state_enabled_default = (
-        bool(config.state.enabled)
-        if config is not None
-        else bool(_as_dict(raw.get("state")).get("enabled", False))
-    )
-    state_dsn_default = existing_env.get("MOBIUS_STATE_DSN", "")
 
     openai_key = _prompt_secret(
         "OpenAI API key",
@@ -240,22 +219,12 @@ def run_onboarding(
         "System prompts directory",
         prompts_default,
     )
-    state_enabled = _prompt_confirm(
-        "Enable stateful pipeline (check-ins/memory)?",
-        default=state_enabled_default,
-    )
-    state_dsn = _prompt_secret(
-        "State Postgres DSN",
-        state_dsn_default if state_enabled else "",
-    )
-
     _write_env_file(
         env_path,
         {
             "OPENAI_API_KEY": openai_key,
             "GEMINI_API_KEY": gemini_key,
             "MOBIUS_API_KEY": mobius_api_key,
-            "MOBIUS_STATE_DSN": state_dsn if state_enabled else "",
         },
     )
 
@@ -272,11 +241,7 @@ def run_onboarding(
 
     raw.setdefault("specialists", {})
     raw["specialists"]["prompts_directory"] = prompts_dir
-
-    raw.setdefault("state", {})
-    raw["state"]["enabled"] = state_enabled
-    raw["state"].setdefault("database", {})
-    raw["state"]["database"]["dsn"] = "${ENV:MOBIUS_STATE_DSN}"
+    raw.pop("state", None)
 
     _save_yaml(cfg_path, raw)
 

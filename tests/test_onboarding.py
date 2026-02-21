@@ -24,7 +24,6 @@ def test_onboarding_keep_mode_continues_with_existing_values(
                 "OPENAI_API_KEY=existing-openai",
                 "GEMINI_API_KEY=existing-gemini",
                 "MOBIUS_API_KEY=existing-mobius-key",
-                "MOBIUS_STATE_DSN=postgresql://user:pass@localhost:5432/mobius",
             ]
         ),
         encoding="utf-8",
@@ -36,7 +35,6 @@ def test_onboarding_keep_mode_continues_with_existing_values(
             "",  # service host
             "",  # service port
             "",  # prompts dir
-            "y",  # enable stateful pipeline
         ]
     )
     secret_values = iter(
@@ -44,7 +42,6 @@ def test_onboarding_keep_mode_continues_with_existing_values(
             "",  # openai key (keep existing)
             "",  # gemini key (keep existing)
             "",  # mobius api key (keep existing)
-            "",  # state dsn (keep existing)
         ]
     )
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(input_values))
@@ -59,8 +56,7 @@ def test_onboarding_keep_mode_continues_with_existing_values(
     assert "OPENAI_API_KEY=existing-openai" in env_text
     assert "GEMINI_API_KEY=existing-gemini" in env_text
     assert "MOBIUS_API_KEY=existing-mobius-key" in env_text
-    assert "MOBIUS_STATE_DSN=postgresql://user:pass@localhost:5432/mobius" in env_text
-    assert "MOBIUS_STATE_ENABLED=" not in env_text
+    assert "MOBIUS_STATE_DSN=" not in env_text
 
 
 def test_onboarding_cancel_mode_stops_without_writing(

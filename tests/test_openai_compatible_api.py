@@ -35,15 +35,6 @@ def test_diagnostics_endpoints_are_available() -> None:
     assert payload["version"] == __version__
     assert payload["config"]["api"]["public_model_id"] == "mobius"
     assert payload["config"]["api"]["attribution"]["enabled"] is True
-    assert payload["config"]["state"]["enabled"] is False
-    assert payload["config"]["state"]["projection"]["mode"] == "one_way"
-    assert payload["config"]["state"]["user_scope"]["policy"] == "by_user"
-    assert payload["config"]["state"]["decision"]["enabled"] is True
-    assert payload["config"]["state"]["decision"]["facts_only"] is True
-    assert payload["config"]["state"]["decision"]["strict_grounding"] is True
-    assert payload["config"]["state"]["decision"]["max_json_retries"] == 1
-    assert payload["config"]["state"]["decision"]["on_failure"] == "footer_warning"
-    assert payload["config"]["state"]["memory"]["semantic_merge"]["enabled"] is True
 
 
 class _StubOrchestrator:
